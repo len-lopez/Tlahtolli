@@ -1,0 +1,6 @@
+[
+    { "word": "Iztac", "meaning": "White" },
+    { "word": "Tiltic", "meaning": "Black" },
+    { "word": "Chichiltic", "meaning": "Red", "parts": [ "chi", "chil", "tic" ] },
+    { "word": "Coztic", "meaning": "Yellow" }
+]
