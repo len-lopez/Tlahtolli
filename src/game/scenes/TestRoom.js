@@ -67,6 +67,20 @@ export class TestRoom extends Scene
         this.scene.launch('Overlay');
     }
 
+    // Called by the overlay when a used q/w/e slot is pressed.
+    // The action name comes from the word list (src/data/wordlist.json).
+    doAction (action)
+    {
+        if (action === 'jump')
+        {
+            // Only jump when standing on the floor, not in mid-air.
+            if (this.player.body.blocked.down)
+            {
+                this.player.body.setVelocityY(-250);
+            }
+        }
+    }
+
     update ()
     {
         const speed = 80; // pixels per second

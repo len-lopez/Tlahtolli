@@ -142,7 +142,23 @@ export class Overlay extends Scene
             // q/w/e on an empty slot opens the text prompt.
             this.openPrompt(letter);
         }
-        // q/w/e on a used slot: does nothing yet.
+        else
+        {
+            // q/w/e on a used slot: do whatever the word does.
+            this.useSlot(letter);
+        }
+    }
+
+    // Looks up the word's action in the word list and tells the room to do it.
+    useSlot (letter)
+    {
+        const word = this.slots[letter].word;
+        const entry = wordList.find((e) => e.word === word);
+
+        if (entry && entry.action)
+        {
+            this.scene.get('TestRoom').doAction(entry.action);
+        }
     }
 
     toggleMenu ()
