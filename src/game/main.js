@@ -1,4 +1,5 @@
 import { TestRoom } from './scenes/TestRoom';
+import { Overlay } from './scenes/Overlay';
 import { AUTO, Scale, Game } from 'phaser';
 
 // Find out more information about the Game Config at:
@@ -23,7 +24,8 @@ const config = {
         autoCenter: Scale.CENTER_BOTH
     },
     scene: [
-        TestRoom
+        TestRoom,
+        Overlay
     ]
 };
 

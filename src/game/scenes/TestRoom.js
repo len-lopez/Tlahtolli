@@ -59,9 +59,26 @@ export class TestRoom extends Scene
         // The room's edges are the edges of the map.
         this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
 
-        // Keyboard: arrow keys for walking, Q W E reserved for later.
+        // Keyboard: arrow keys for walking.
+        // (Q, W, E and Enter are handled in the overlay.)
         this.cursors = this.input.keyboard.createCursorKeys();
-        this.keys = this.input.keyboard.addKeys('Q,W,E');
+
+        // Start the overlay (q/w/e circles) on top of the room.
+        this.scene.launch('Overlay');
+    }
+
+    // Called by the overlay when a used q/w/e slot is pressed.
+    // The action name comes from the word list (src/data/wordlist.json).
+    doAction (action)
+    {
+        if (action === 'jump')
+        {
+            // Only jump when standing on the floor, not in mid-air.
+            if (this.player.body.blocked.down)
+            {
+                this.player.body.setVelocityY(-250);
+            }
+        }
     }
 
     update ()
