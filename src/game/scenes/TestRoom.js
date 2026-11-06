@@ -54,8 +54,20 @@ const FISH_COLORS = [
     { name: 'black',  hex: 0x111111 }
 ];
 
+// --- Fishing settings ---
+// How far from the water's edge you can still fish, in tiles.
+const FISHING_REACH = 2;
+// How far the float is thrown, in pixels (5 tiles).
+const THROW_DISTANCE = 5 * TILE;
+// How fast the float drifts away while you wait, in pixels per second.
+const DRIFT_SPEED = 3;
 // How close (in pixels, left/right) a fish must swim to the float to bite.
 const BITE_DISTANCE = 6;
+// No bites at all until the float has been on the water this long (milliseconds).
+const BITE_WAIT = 2000;
+// When a fish swims under the float, the chance that it bites (0.25 = 1 in 4).
+// If it doesn't, it ignores the float until it has swum away and comes back.
+const BITE_CHANCE = 0.25;
 
 // A random whole number from min to max (both included).
 function randomBetween (min, max)
@@ -215,16 +227,24 @@ export class TestRoom extends Scene
         this.eye.setPosition(this.player.x + this.facing * 3, this.player.y - 7);
     }
 
-    // Is there a water tile right in front of the player?
+    // Is there water in front of the player, at most FISHING_REACH tiles away?
     isFacingWater ()
     {
         const body = this.player.body;
+        const front = this.facing === 1 ? body.right : body.left;
 
-        // A point half a tile in front of the player, just below the ground's surface.
-        const frontX = this.facing === 1 ? body.right + TILE / 2 : body.left - TILE / 2;
-        const tile = this.floor.getTileAtWorldXY(frontX, this.floorTop + 1);
+        // Check the ground one tile after another, starting right in front of the player.
+        for (let i = 0; i < FISHING_REACH; i++)
+        {
+            const x = front + this.facing * (i * TILE + TILE / 2);
+            const tile = this.floor.getTileAtWorldXY(x, this.floorTop + 1);
 
-        return tile !== null && tile.index === WATER;
+            if (tile !== null && tile.index === WATER)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Throws out the fishing line: a small float flies from the player onto the water,
@@ -233,19 +253,20 @@ export class TestRoom extends Scene
     {
         const start = this.rodTip();
 
-        // The float lands 3 tiles in front of the player, on the water's surface.
+        // The float lands THROW_DISTANCE in front of the player, on the water's surface.
         const float = this.add.rectangle(start.x, start.y, 4, 4, 0xffffff);
 
         this.fishing = {
             float: float,
             line: this.add.graphics(),
             landed: false,     // true once the float is on the water
+            waited: 0,         // milliseconds the float has been on the water
             hookedFish: null   // the fish that bit, or null
         };
 
         this.tweens.add({
             targets: float,
-            x: start.x + this.facing * 3 * TILE,
+            x: this.clampToWater(start.x + this.facing * THROW_DISTANCE),
             y: this.floorTop - 2,
             duration: 400,
             ease: 'Quad.easeOut',
@@ -263,24 +284,99 @@ export class TestRoom extends Scene
 
     // Looks for a fish under the float. If there is one, it bites
     // and the q/w/e minigame starts.
-    checkForBite ()
+    // Keeps a position inside the water (where the fish can swim).
+    clampToWater (x)
+    {
+        return Math.min(Math.max(x, this.fishArea.left), this.fishArea.right);
+    }
+
+    // Called every frame while the float is on the water and nothing has bitten yet:
+    // the float drifts away slowly, and fish may bite.
+    updateFishing (delta)
     {
         if (!this.fishing || !this.fishing.landed || this.fishing.hookedFish)
         {
             return;
         }
 
-        const floatX = this.fishing.float.x;
-        const fish = this.fishes.find((f) => Math.abs(f.body.x - floatX) <= BITE_DISTANCE);
+        const float = this.fishing.float;
+        this.fishing.waited += delta;
 
-        if (!fish)
+        // Drift away from the player, but never past the end of the water.
+        float.x = this.clampToWater(float.x + this.facing * DRIFT_SPEED * delta / 1000);
+
+        this.checkForBite();
+    }
+
+    checkForBite ()
+    {
+        const floatX = this.fishing.float.x;
+        const waitedLongEnough = this.fishing.waited >= BITE_WAIT;
+        let biter = null;
+
+        this.fishes.forEach((fish) => {
+            const underFloat = Math.abs(fish.body.x - floatX) <= BITE_DISTANCE;
+
+            if (!underFloat)
+            {
+                // Swam away from the float: next time it comes by, it can decide again.
+                fish.ignoringFloat = false;
+                return;
+            }
+
+            if (biter || fish.ignoringFloat || !waitedLongEnough)
+            {
+                return;
+            }
+
+            // The fish decides once, as it arrives under the float, whether to bite.
+            if (Math.random() < BITE_CHANCE)
+            {
+                biter = fish;
+            }
+            else
+            {
+                fish.ignoringFloat = true;
+            }
+        });
+
+        if (!biter)
         {
             return;
         }
 
-        // The fish is on the line: it stops swimming.
+        this.hookFish(biter);
+    }
+
+    // A fish bites: it moves right under the float and shakes, the float bobs,
+    // and the q/w/e minigame starts.
+    hookFish (fish)
+    {
         fish.hooked = true;
         this.fishing.hookedFish = fish;
+
+        const float = this.fishing.float;
+
+        // Snap the fish to just below the float.
+        fish.body.setPosition(float.x, this.floorTop + 4);
+
+        // The fish shakes left and right.
+        this.tweens.add({
+            targets: fish.body,
+            x: { from: float.x - 2, to: float.x + 2 },
+            duration: 60,
+            yoyo: true,
+            repeat: -1 // forever, until the minigame is over
+        });
+
+        // The float bobs up and down.
+        this.tweens.add({
+            targets: float,
+            y: { from: this.floorTop - 2, to: this.floorTop },
+            duration: 120,
+            yoyo: true,
+            repeat: -1
+        });
 
         const started = this.scene.get('Overlay').startMinigame(fish.colorName);
         if (!started)
@@ -317,6 +413,9 @@ export class TestRoom extends Scene
     // to just above the player's head, stays there for a moment, then disappears.
     showCatch (fish)
     {
+        // Stop the shaking first.
+        this.tweens.killTweensOf(fish.body);
+
         this.tweens.add({
             targets: fish.body,
             x: this.player.x,
@@ -340,6 +439,7 @@ export class TestRoom extends Scene
         // A fish that is still on the line gets away and swims on.
         if (this.fishing.hookedFish)
         {
+            this.tweens.killTweensOf(this.fishing.hookedFish.body); // stop shaking
             this.fishing.hookedFish.hooked = false;
         }
 
@@ -468,7 +568,7 @@ export class TestRoom extends Scene
         const speed = 80; // pixels per second
 
         this.moveFishes(delta);
-        this.checkForBite();
+        this.updateFishing(delta);
 
         // Fell completely off the bottom of the screen: start again at the water's edge.
         if (this.player.body.top > this.mapHeight)
