@@ -45,6 +45,18 @@ const ROOMS = [
     buildWaterRoomGrid() // room 2: right half is water
 ];
 
+// Fish: small colored rectangles (10 x 5 pixels) in these colors.
+// The name must match a "meaning" in src/data/fishing-words.json (upper/lower case doesn't matter).
+const FISH_COLORS = [
+    { name: 'red',    hex: 0xd62828 },
+    { name: 'yellow', hex: 0xf2c418 },
+    { name: 'white',  hex: 0xffffff },
+    { name: 'black',  hex: 0x111111 }
+];
+
+// How close (in pixels, left/right) a fish must swim to the float to bite.
+const BITE_DISTANCE = 6;
+
 // A random whole number from min to max (both included).
 function randomBetween (min, max)
 {
@@ -131,14 +143,7 @@ export class TestRoom extends Scene
         this.respawnX = waterStartColumn * TILE - 8;
         this.respawnY = floorTop - 12;
 
-        // --- Fish in the water: small colored rectangles (10 x 5 pixels) ---
-        const fishColors = [
-            0xd62828, // red
-            0xf2c418, // yellow
-            0xffffff, // white
-            0x111111  // black
-        ];
-
+        // --- Fish in the water ---
         // The area the fish can swim in. They stay a little away from the edges.
         const waterLeft = waterStartColumn * TILE;
         const waterTiles = grid[ROOM_HEIGHT - 1].filter((tile) => tile === WATER).length;
@@ -149,25 +154,11 @@ export class TestRoom extends Scene
             bottom: floorTop + FLOOR_ROWS * TILE - 5
         };
 
-        // A random number of fish (between 4 and 10), each with a random color,
-        // a random place, a random direction and a random speed.
-        const fishCount = randomBetween(4, 10);
+        // Which room the water is in (0 = room 1, 1 = room 2).
+        this.waterRoom = Math.floor(waterLeft / (ROOM_WIDTH * TILE));
+
+        // No fish at the start: they are made every time you walk into the water room.
         this.fishes = [];
-
-        for (let i = 0; i < fishCount; i++)
-        {
-            const color = fishColors[Math.floor(Math.random() * fishColors.length)];
-            const x = randomBetween(this.fishArea.left, this.fishArea.right);
-            const y = randomBetween(this.fishArea.top, this.fishArea.bottom);
-
-            this.fishes.push({
-                body: this.add.rectangle(x, y, 10, 5, color),
-                direction: Math.random() < 0.5 ? -1 : 1, // -1 = left, 1 = right
-                speed: randomBetween(8, 20),             // pixels per second
-                upDown: randomBetween(-5, 5),            // up/down speed: minus = up, plus = down
-                turnTimer: randomBetween(1000, 4000)     // milliseconds until it turns around by itself
-            });
-        }
 
         // The left, right and top edges of the whole map (all rooms together) are walls.
         // The bottom edge is open, so the player can fall off the screen.
@@ -247,7 +238,9 @@ export class TestRoom extends Scene
 
         this.fishing = {
             float: float,
-            line: this.add.graphics()
+            line: this.add.graphics(),
+            landed: false,     // true once the float is on the water
+            hookedFish: null   // the fish that bit, or null
         };
 
         this.tweens.add({
@@ -255,7 +248,84 @@ export class TestRoom extends Scene
             x: start.x + this.facing * 3 * TILE,
             y: this.floorTop - 2,
             duration: 400,
-            ease: 'Quad.easeOut'
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                if (this.fishing)
+                {
+                    this.fishing.landed = true;
+                }
+            }
+        });
+
+        // While the line is out, the q/w/e circles disappear and the powers can't be used.
+        this.scene.get('Overlay').startFishing();
+    }
+
+    // Looks for a fish under the float. If there is one, it bites
+    // and the q/w/e minigame starts.
+    checkForBite ()
+    {
+        if (!this.fishing || !this.fishing.landed || this.fishing.hookedFish)
+        {
+            return;
+        }
+
+        const floatX = this.fishing.float.x;
+        const fish = this.fishes.find((f) => Math.abs(f.body.x - floatX) <= BITE_DISTANCE);
+
+        if (!fish)
+        {
+            return;
+        }
+
+        // The fish is on the line: it stops swimming.
+        fish.hooked = true;
+        this.fishing.hookedFish = fish;
+
+        const started = this.scene.get('Overlay').startMinigame(fish.colorName);
+        if (!started)
+        {
+            // No word for this color in the fishing word list: the fish just gets away.
+            this.stopFishing();
+        }
+    }
+
+    // Called by the overlay when the minigame is over.
+    // success = true: the fish is caught. false: wrong button or time ran out.
+    fishingResult (success)
+    {
+        if (!this.fishing || !this.fishing.hookedFish)
+        {
+            return;
+        }
+
+        if (success)
+        {
+            // Caught: the fish is taken out of the water.
+            const fish = this.fishing.hookedFish;
+            this.fishes = this.fishes.filter((f) => f !== fish);
+            this.fishing.hookedFish = null;
+            this.showCatch(fish);
+        }
+
+        // Either way, the line is pulled in.
+        // (If the fish wasn't caught, stopFishing lets it swim away.)
+        this.stopFishing();
+    }
+
+    // Placeholder "caught it!" animation: the fish flies out of the water
+    // to just above the player's head, stays there for a moment, then disappears.
+    showCatch (fish)
+    {
+        this.tweens.add({
+            targets: fish.body,
+            x: this.player.x,
+            y: this.player.body.top - 8,
+            duration: 500,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                this.time.delayedCall(700, () => fish.body.destroy());
+            }
         });
     }
 
@@ -267,10 +337,19 @@ export class TestRoom extends Scene
             return;
         }
 
+        // A fish that is still on the line gets away and swims on.
+        if (this.fishing.hookedFish)
+        {
+            this.fishing.hookedFish.hooked = false;
+        }
+
         this.tweens.killTweensOf(this.fishing.float);
         this.fishing.float.destroy();
         this.fishing.line.destroy();
         this.fishing = null;
+
+        // The q/w/e circles and powers come back.
+        this.scene.get('Overlay').endFishing();
     }
 
     // Where the line starts: the top front corner of the player.
@@ -301,11 +380,48 @@ export class TestRoom extends Scene
         });
     }
 
+    // Makes a new set of fish: a random number (between 4 and 10), each with a random color,
+    // a random place, a random direction and a random speed.
+    spawnFishes ()
+    {
+        const fishCount = randomBetween(4, 10);
+
+        for (let i = 0; i < fishCount; i++)
+        {
+            const color = FISH_COLORS[Math.floor(Math.random() * FISH_COLORS.length)];
+            const x = randomBetween(this.fishArea.left, this.fishArea.right);
+            const y = randomBetween(this.fishArea.top, this.fishArea.bottom);
+
+            this.fishes.push({
+                body: this.add.rectangle(x, y, 10, 5, color.hex),
+                colorName: color.name,
+                hooked: false,                           // true while it's on the line
+                direction: Math.random() < 0.5 ? -1 : 1, // -1 = left, 1 = right
+                speed: randomBetween(8, 20),             // pixels per second
+                upDown: randomBetween(-5, 5),            // up/down speed: minus = up, plus = down
+                turnTimer: randomBetween(1000, 4000)     // milliseconds until it turns around by itself
+            });
+        }
+    }
+
+    // Takes all fish away.
+    removeFishes ()
+    {
+        this.fishes.forEach((fish) => fish.body.destroy());
+        this.fishes = [];
+    }
+
     // Moves every fish a little bit. Called once per frame.
     // delta = milliseconds since the last frame.
     moveFishes (delta)
     {
         this.fishes.forEach((fish) => {
+            // A fish on the line doesn't swim.
+            if (fish.hooked)
+            {
+                return;
+            }
+
             // Swim left or right.
             fish.body.x += fish.direction * fish.speed * delta / 1000;
 
@@ -352,6 +468,7 @@ export class TestRoom extends Scene
         const speed = 80; // pixels per second
 
         this.moveFishes(delta);
+        this.checkForBite();
 
         // Fell completely off the bottom of the screen: start again at the water's edge.
         if (this.player.body.top > this.mapHeight)
@@ -396,6 +513,14 @@ export class TestRoom extends Scene
         {
             this.currentRoom = room;
             this.cameras.main.setScroll(room * roomPixelWidth, 0);
+
+            // Fresh fish every time you walk into the water room.
+            // Leaving it takes the old fish away.
+            this.removeFishes();
+            if (room === this.waterRoom)
+            {
+                this.spawnFishes();
+            }
         }
     }
 }

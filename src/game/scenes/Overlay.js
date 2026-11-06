@@ -1,7 +1,42 @@
 import { Scene } from 'phaser';
 import wordList from '../../data/wordlist.json';
+import fishingWords from '../../data/fishing-words.json';
 
 const SLOT_KEYS = [ 'q', 'w', 'e' ];
+
+// How long the player has to catch a biting fish, in milliseconds.
+const MINIGAME_TIME = 5000;
+
+// Splits a word into three parts of (roughly) the same length.
+// The first parts get one letter more if it doesn't divide evenly.
+// Example: "iztac" (5 letters) -> "iz", "ta", "c"
+function splitIntoThree (word)
+{
+    const base = Math.floor(word.length / 3);
+    const extra = word.length % 3;
+    const parts = [];
+    let start = 0;
+
+    for (let i = 0; i < 3; i++)
+    {
+        const length = base + (i < extra ? 1 : 0);
+        parts.push(word.slice(start, start + length));
+        start += length;
+    }
+    return parts;
+}
+
+// Returns a copy of the list in a random order.
+function shuffle (list)
+{
+    const copy = [ ...list ];
+    for (let i = copy.length - 1; i > 0; i--)
+    {
+        const j = Math.floor(Math.random() * (i + 1));
+        [ copy[i], copy[j] ] = [ copy[j], copy[i] ];
+    }
+    return copy;
+}
 
 const COLOR_EMPTY = 0x333333;
 const COLOR_USED = 0x2e7d9a;
@@ -27,10 +62,15 @@ export class Overlay extends Scene
         const h = this.scale.height;
 
         // What the player is doing right now:
-        // 'play'   = walking around
-        // 'menu'   = menu screen is open
-        // 'prompt' = typing a word into a slot
+        // 'play'     = walking around
+        // 'menu'     = menu screen is open
+        // 'prompt'   = typing a word into a slot
+        // 'fishing'  = the fishing line is out (no powers, no menu)
+        // 'minigame' = a fish bit, q/w/e boxes are on screen
         this.mode = 'play';
+
+        // The fishing minigame while it's running, or null.
+        this.minigame = null;
 
         // --- q / w / e slots on the left edge ---
         // Each slot is either empty (word = null) or used (word = a word from the list).
@@ -110,6 +150,18 @@ export class Overlay extends Scene
         // Holding a key down repeats it; ignore those repeats outside the prompt.
         if (event.repeat)
         {
+            return;
+        }
+
+        if (this.mode === 'minigame')
+        {
+            this.handleMinigameKey(event);
+            return;
+        }
+
+        if (this.mode === 'fishing')
+        {
+            // Line is out: q/w/e powers and the menu can't be used.
             return;
         }
 
@@ -241,6 +293,166 @@ export class Overlay extends Scene
         const entry = wordList.find((e) => e.word.toLowerCase() === wanted);
         return entry ? entry.word : null;
     }
+
+    // ---------- Fishing ----------
+
+    // Called by the room when the line is thrown out.
+    startFishing ()
+    {
+        this.mode = 'fishing';
+        this.qweButtons.setVisible(false);
+    }
+
+    // Called by the room when the line is pulled in.
+    endFishing ()
+    {
+        this.closeMinigame();
+        this.mode = 'play';
+        this.qweButtons.setVisible(true);
+    }
+
+    // Called by the room when a fish bites.
+    // colorName is the fish's color, e.g. 'white'.
+    // Returns false if there's no word for that color in the fishing word list.
+    startMinigame (colorName)
+    {
+        const entry = fishingWords.find((e) => e.meaning.toLowerCase() === colorName);
+        if (!entry)
+        {
+            return false;
+        }
+
+        const w = this.scale.width;
+        const h = this.scale.height;
+
+        // The word in lowercase, cut into three parts.
+        // If the word list says how to split the word ("parts"), use that;
+        // otherwise cut it into three parts of about the same length.
+        // These are in the right order; the boxes get them in a random order.
+        const parts = entry.parts
+            ? entry.parts.map((part) => part.toLowerCase())
+            : splitIntoThree(entry.word.toLowerCase());
+        const mixed = shuffle(parts);
+
+        // Everything on screen for the minigame goes into one container,
+        // so it can be removed in one go.
+        const ui = this.add.container(0, 0);
+
+        // --- Three boxes for q, w, e, side by side in the middle of the screen ---
+        const boxWidth = 64;
+        const boxHeight = 32;
+        const gap = 10;
+        const boxY = h / 2;
+        const boxes = {};
+
+        SLOT_KEYS.forEach((letter, i) => {
+            // i = 0, 1, 2  ->  left, middle, right
+            const boxX = w / 2 + (i - 1) * (boxWidth + gap);
+
+            const box = this.add.rectangle(boxX, boxY, boxWidth, boxHeight, COLOR_EMPTY)
+                .setStrokeStyle(1, 0xffffff);
+            const keyLabel = this.add.text(boxX - boxWidth / 2 + 3, boxY - boxHeight / 2 + 1, letter,
+                { ...TEXT_STYLE, fontSize: 9 });
+            const partLabel = this.add.text(boxX, boxY + 2, mixed[i], TEXT_STYLE).setOrigin(0.5);
+
+            ui.add([ box, keyLabel, partLabel ]);
+            boxes[letter] = { box, part: mixed[i], used: false };
+        });
+
+        // --- Timer in the top right corner: a bar that gets shorter ---
+        const barWidth = 60;
+        const barX = w - 10 - barWidth; // left end of the bar
+        const barY = 12;
+
+        const barBack = this.add.rectangle(barX, barY, barWidth, 6, COLOR_EMPTY)
+            .setOrigin(0, 0.5).setStrokeStyle(1, 0xffffff);
+        const bar = this.add.rectangle(barX, barY, barWidth, 6, COLOR_USED).setOrigin(0, 0.5);
+        ui.add([ barBack, bar ]);
+
+        this.minigame = {
+            ui,
+            boxes,
+            parts,
+            next: 0,                  // which part has to be pressed next (0, 1 or 2)
+            timeLeft: MINIGAME_TIME,
+            bar,
+            barWidth
+        };
+
+        this.mode = 'minigame';
+        return true;
+    }
+
+    // A key press during the minigame.
+    handleMinigameKey (event)
+    {
+        const letter = event.key.toLowerCase();
+        if (!SLOT_KEYS.includes(letter))
+        {
+            return; // other keys do nothing here
+        }
+
+        const game = this.minigame;
+        const pressed = game.boxes[letter];
+
+        if (pressed.used || pressed.part !== game.parts[game.next])
+        {
+            // Wrong box: the fish gets away.
+            this.finishMinigame(false);
+            return;
+        }
+
+        // Right box: mark it and wait for the next one.
+        pressed.used = true;
+        pressed.box.setFillStyle(COLOR_USED);
+        game.next++;
+
+        if (game.next === game.parts.length)
+        {
+            this.finishMinigame(true);
+        }
+    }
+
+    // Ends the minigame and tells the room whether the fish was caught.
+    finishMinigame (success)
+    {
+        this.closeMinigame();
+        this.scene.get('TestRoom').fishingResult(success);
+    }
+
+    // Removes the minigame from the screen.
+    closeMinigame ()
+    {
+        if (this.minigame)
+        {
+            this.minigame.ui.destroy();
+            this.minigame = null;
+        }
+    }
+
+    // Called every frame: runs the minigame timer.
+    update (time, delta)
+    {
+        if (this.mode !== 'minigame' || !this.minigame)
+        {
+            return;
+        }
+
+        const game = this.minigame;
+        game.timeLeft -= delta;
+
+        // Shrink the bar to show how much time is left.
+        const share = Math.max(game.timeLeft, 0) / MINIGAME_TIME;
+        game.bar.setSize(game.barWidth * share, 6);
+
+        if (game.timeLeft <= 0)
+        {
+            // Time's up: the fish gets away.
+            this.finishMinigame(false);
+        }
+    }
+
+    // ---------- Slots ----------
 
     // Puts a word into a slot, or empties it when word is null.
     setSlotWord (letter, word)
