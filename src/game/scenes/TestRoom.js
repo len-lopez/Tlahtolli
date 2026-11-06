@@ -70,6 +70,12 @@ const BITE_SWIM_SPEED = 40;
 // When a fish swims under the float, the chance that it bites (0.25 = 1 in 4).
 // If it doesn't, it ignores the float until it has swum away and comes back.
 const BITE_CHANCE = 0.25;
+// The bite chance is multiplied by these, depending on how the last catch went:
+// After catching a fish: fish of the SAME color bite less often.
+const AFTER_CATCH_SAME_COLOR = 0.3;
+// After losing a fish: fish of the SAME color bite more often, other colors less often.
+const AFTER_FAIL_SAME_COLOR = 2;
+const AFTER_FAIL_OTHER_COLOR = 0.5;
 
 // A random whole number from min to max (both included).
 function randomBetween (min, max)
@@ -150,6 +156,9 @@ export class TestRoom extends Scene
 
         // The fishing line while it's out, or null when the player isn't fishing.
         this.fishing = null;
+
+        // How the last catch went: { colorName, success }, or null before the first one.
+        this.lastCatch = null;
 
         // Where the player comes back after falling into the water:
         // standing on the floor, right next to the water's edge.
@@ -332,7 +341,7 @@ export class TestRoom extends Scene
             }
 
             // The fish decides once, as it arrives under the float, whether to bite.
-            if (Math.random() < BITE_CHANCE)
+            if (Math.random() < this.biteChanceFor(fish))
             {
                 biter = fish;
             }
@@ -348,6 +357,29 @@ export class TestRoom extends Scene
         }
 
         this.hookFish(biter);
+    }
+
+    // How likely this fish is to bite, depending on how the last catch went.
+    biteChanceFor (fish)
+    {
+        const last = this.lastCatch;
+        if (!last)
+        {
+            return BITE_CHANCE; // nothing caught or lost yet
+        }
+
+        const sameColor = fish.colorName === last.colorName;
+
+        if (last.success)
+        {
+            // Just caught this color: other colors get their turn.
+            return sameColor ? BITE_CHANCE * AFTER_CATCH_SAME_COLOR : BITE_CHANCE;
+        }
+
+        // Just lost this color: a chance to try it again.
+        return sameColor
+            ? BITE_CHANCE * AFTER_FAIL_SAME_COLOR
+            : BITE_CHANCE * AFTER_FAIL_OTHER_COLOR;
     }
 
     // A fish has decided to bite: it swims to the float first.
@@ -416,6 +448,12 @@ export class TestRoom extends Scene
         {
             return;
         }
+
+        // Remember how this catch went; it changes which color is likely to bite next.
+        this.lastCatch = {
+            colorName: this.fishing.hookedFish.colorName,
+            success: success
+        };
 
         if (success)
         {
