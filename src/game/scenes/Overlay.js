@@ -7,6 +7,20 @@ const SLOT_KEYS = [ 'q', 'w', 'e' ];
 // How long the player has to catch a biting fish, in milliseconds.
 const MINIGAME_TIME = 5000;
 
+// After a failed catch: how long the boxes show the right order, in milliseconds.
+const REVEAL_TIME = 1500;
+
+// Size of the q/w/e boxes in the minigame, and the space between them.
+const BOX_WIDTH = 64;
+const BOX_HEIGHT = 32;
+const BOX_GAP = 10;
+
+// True if two lists have the same things in the same order.
+function sameOrder (a, b)
+{
+    return a.every((item, i) => item === b[i]);
+}
+
 // Splits a word into three parts of (roughly) the same length.
 // The first parts get one letter more if it doesn't divide evenly.
 // Example: "iztac" (5 letters) -> "iz", "ta", "c"
@@ -67,6 +81,7 @@ export class Overlay extends Scene
         // 'prompt'   = typing a word into a slot
         // 'fishing'  = the fishing line is out (no powers, no menu)
         // 'minigame' = a fish bit, q/w/e boxes are on screen
+        // 'reveal'   = catch failed, the boxes show the right order for a moment
         this.mode = 'play';
 
         // The fishing minigame while it's running, or null.
@@ -159,7 +174,7 @@ export class Overlay extends Scene
             return;
         }
 
-        if (this.mode === 'fishing')
+        if (this.mode === 'fishing' || this.mode === 'reveal')
         {
             // Line is out: q/w/e powers and the menu can't be used.
             return;
@@ -332,31 +347,37 @@ export class Overlay extends Scene
         const parts = entry.parts
             ? entry.parts.map((part) => part.toLowerCase())
             : splitIntoThree(entry.word.toLowerCase());
-        const mixed = shuffle(parts);
+        // Mix the parts for the boxes. If they come out in the right order by chance,
+        // mix them once more: so the right order still can happen, but much less often.
+        let mixed = shuffle(parts);
+        if (sameOrder(mixed, parts))
+        {
+            mixed = shuffle(parts);
+        }
 
         // Everything on screen for the minigame goes into one container,
         // so it can be removed in one go.
         const ui = this.add.container(0, 0);
 
         // --- Three boxes for q, w, e, side by side in the middle of the screen ---
-        const boxWidth = 64;
-        const boxHeight = 32;
-        const gap = 10;
         const boxY = h / 2;
         const boxes = {};
 
         SLOT_KEYS.forEach((letter, i) => {
-            // i = 0, 1, 2  ->  left, middle, right
-            const boxX = w / 2 + (i - 1) * (boxWidth + gap);
+            // Each box (rectangle + key letter + word part) is its own little container,
+            // so all three pieces move together when the box moves.
+            // slot 0, 1, 2  ->  left, middle, right
+            const holder = this.add.container(this.boxSlotX(i), boxY);
 
-            const box = this.add.rectangle(boxX, boxY, boxWidth, boxHeight, COLOR_EMPTY)
+            const box = this.add.rectangle(0, 0, BOX_WIDTH, BOX_HEIGHT, COLOR_EMPTY)
                 .setStrokeStyle(1, 0xffffff);
-            const keyLabel = this.add.text(boxX - boxWidth / 2 + 3, boxY - boxHeight / 2 + 1, letter,
+            const keyLabel = this.add.text(-BOX_WIDTH / 2 + 3, -BOX_HEIGHT / 2 + 1, letter,
                 { ...TEXT_STYLE, fontSize: 9 });
-            const partLabel = this.add.text(boxX, boxY + 2, mixed[i], TEXT_STYLE).setOrigin(0.5);
+            const partLabel = this.add.text(0, 2, mixed[i], TEXT_STYLE).setOrigin(0.5);
 
-            ui.add([ box, keyLabel, partLabel ]);
-            boxes[letter] = { box, part: mixed[i], used: false };
+            holder.add([ box, keyLabel, partLabel ]);
+            ui.add(holder);
+            boxes[letter] = { holder, box, part: mixed[i], slot: i, used: false };
         });
 
         // --- Timer in the top right corner: a bar that gets shorter ---
@@ -402,9 +423,21 @@ export class Overlay extends Scene
             return;
         }
 
-        // Right box: mark it and wait for the next one.
+        // Right box: mark it and move it to its place in the word.
+        // The box that was in that place swaps over to where this one was.
         pressed.used = true;
         pressed.box.setFillStyle(COLOR_USED);
+
+        const targetSlot = game.next;
+        const other = Object.values(game.boxes).find((b) => b.slot === targetSlot);
+        if (other !== pressed)
+        {
+            other.slot = pressed.slot;
+            this.moveBox(other);
+        }
+        pressed.slot = targetSlot;
+        this.moveBox(pressed);
+
         game.next++;
 
         if (game.next === game.parts.length)
@@ -413,11 +446,60 @@ export class Overlay extends Scene
         }
     }
 
+    // Left/right position of box slot 0, 1 or 2 on the screen.
+    boxSlotX (slot)
+    {
+        return this.scale.width / 2 + (slot - 1) * (BOX_WIDTH + BOX_GAP);
+    }
+
+    // Slides a box to the position of its slot.
+    moveBox (b)
+    {
+        this.tweens.killTweensOf(b.holder); // stop any slide that is still going
+        this.tweens.add({
+            targets: b.holder,
+            x: this.boxSlotX(b.slot),
+            duration: 150,
+            ease: 'Quad.easeOut'
+        });
+    }
+
     // Ends the minigame and tells the room whether the fish was caught.
     finishMinigame (success)
     {
+        if (!success)
+        {
+            this.showRightOrder();
+            return;
+        }
+
         this.closeMinigame();
-        this.scene.get('TestRoom').fishingResult(success);
+        this.scene.get('TestRoom').fishingResult(true);
+    }
+
+    // After a failed catch: the boxes slide into the right order for a moment,
+    // to remind you of the word. Then the fish gets away.
+    showRightOrder ()
+    {
+        const game = this.minigame;
+        this.mode = 'reveal'; // keys do nothing while the right order is shown
+
+        // Give every box the slot of its part in the word.
+        // (If two parts are the same, each gets its own slot.)
+        const boxes = Object.values(game.boxes);
+        const placed = [];
+
+        game.parts.forEach((part, slot) => {
+            const b = boxes.find((box) => box.part === part && !placed.includes(box));
+            placed.push(b);
+            b.slot = slot;
+            this.moveBox(b);
+        });
+
+        game.revealTimer = this.time.delayedCall(REVEAL_TIME, () => {
+            this.closeMinigame();
+            this.scene.get('TestRoom').fishingResult(false);
+        });
     }
 
     // Removes the minigame from the screen.
@@ -425,6 +507,10 @@ export class Overlay extends Scene
     {
         if (this.minigame)
         {
+            if (this.minigame.revealTimer)
+            {
+                this.minigame.revealTimer.remove();
+            }
             this.minigame.ui.destroy();
             this.minigame = null;
         }
