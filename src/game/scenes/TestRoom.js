@@ -166,10 +166,8 @@ export class TestRoom extends Scene
         this.physics.world.setBoundsCollision(true, true, true, false);
         this.mapHeight = map.heightInPixels;
 
-        // The camera follows the player, so the rooms scroll by as one continuous area.
-        // It stops at the edges of the map, so you never see past the outer walls.
-        this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
-        this.cameras.main.startFollow(this.player, true);
+        // The room the player is in right now (0 = room 1, 1 = room 2).
+        this.currentRoom = 0;
 
         // Keyboard: arrow keys for walking.
         // (Q, W, E and Enter are handled in the overlay.)
@@ -372,6 +370,17 @@ export class TestRoom extends Scene
             this.fishing.line.clear();
             this.fishing.line.lineStyle(1, 0xffffff);
             this.fishing.line.lineBetween(tip.x, tip.y, float.x, float.y);
+        }
+
+        // Which room is the player in? Each room is one screen wide.
+        const roomPixelWidth = ROOM_WIDTH * TILE;
+        const room = Math.floor(this.player.x / roomPixelWidth);
+
+        // When the player walks into another room, the camera jumps there.
+        if (room !== this.currentRoom)
+        {
+            this.currentRoom = room;
+            this.cameras.main.setScroll(room * roomPixelWidth, 0);
         }
     }
 }
