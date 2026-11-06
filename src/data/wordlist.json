@@ -1,3 +1,4 @@
 [
-    { "word": "Choloa", "action": "jump" }
+    { "word": "Choloa", "action": "jump" },
+    { "word": "Michma", "action": "fish" }
 ]
