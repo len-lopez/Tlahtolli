@@ -109,6 +109,15 @@ export class TestRoom extends Scene
         // Changes whenever you walk left or right.
         this.facing = 1;
 
+        // The "face": a small dark eye near the top of the player,
+        // on the side the player is looking at.
+        this.eye = this.add.rectangle(0, 0, 2, 3, 0x111111);
+        this.updateFace();
+
+        // Move the eye after the player has moved in each frame,
+        // so it never lags behind.
+        this.events.on('postupdate', () => this.updateFace());
+
         // Remembered for fishing: the ground layer (to look up tiles) and where the ground starts.
         this.floor = floor;
         this.floorTop = floorTop;
@@ -207,6 +216,12 @@ export class TestRoom extends Scene
                 this.failAction();
             }
         }
+    }
+
+    // Puts the eye on the front side of the player, near the top.
+    updateFace ()
+    {
+        this.eye.setPosition(this.player.x + this.facing * 3, this.player.y - 7);
     }
 
     // Is there a water tile right in front of the player?
