@@ -65,6 +65,8 @@ const DRIFT_SPEED = 3;
 const BITE_DISTANCE = 6;
 // No bites at all until the float has been on the water this long (milliseconds).
 const BITE_WAIT = 2000;
+// How fast a biting fish swims to the float, in pixels per second.
+const BITE_SWIM_SPEED = 40;
 // When a fish swims under the float, the chance that it bites (0.25 = 1 in 4).
 // If it doesn't, it ignores the float until it has swum away and comes back.
 const BITE_CHANCE = 0.25;
@@ -348,17 +350,37 @@ export class TestRoom extends Scene
         this.hookFish(biter);
     }
 
-    // A fish bites: it moves right under the float and shakes, the float bobs,
-    // and the q/w/e minigame starts.
+    // A fish has decided to bite: it swims to the float first.
     hookFish (fish)
     {
+        // The fish stops its normal swimming, and the float stops drifting.
         fish.hooked = true;
         this.fishing.hookedFish = fish;
 
         const float = this.fishing.float;
+        const targetX = float.x;
+        const targetY = this.floorTop + 4; // just below the float
 
-        // Snap the fish to just below the float.
-        fish.body.setPosition(float.x, this.floorTop + 4);
+        // The fish swims to the float. The further away it is, the longer it takes.
+        const distance = Math.hypot(targetX - fish.body.x, targetY - fish.body.y);
+        const duration = Math.max(200, distance / BITE_SWIM_SPEED * 1000);
+
+        this.tweens.add({
+            targets: fish.body,
+            x: targetX,
+            y: targetY,
+            duration: duration,
+            ease: 'Sine.easeInOut',
+            // Only once it has arrived does it bite.
+            onComplete: () => this.startBite(fish)
+        });
+    }
+
+    // The fish has reached the float and bites: it shakes, the float bobs,
+    // and the q/w/e minigame starts.
+    startBite (fish)
+    {
+        const float = this.fishing.float;
 
         // The fish shakes left and right.
         this.tweens.add({
