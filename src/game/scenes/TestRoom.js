@@ -59,9 +59,9 @@ export class TestRoom extends Scene
         // The room's edges are the edges of the map.
         this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
 
-        // Keyboard: arrow keys for walking, Q W E reserved for later.
+        // Keyboard: arrow keys for walking.
+        // (Q, W, E and Enter are handled in the overlay.)
         this.cursors = this.input.keyboard.createCursorKeys();
-        this.keys = this.input.keyboard.addKeys('Q,W,E');
 
         // Start the overlay (q/w/e circles) on top of the room.
         this.scene.launch('Overlay');
