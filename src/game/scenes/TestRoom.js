@@ -62,6 +62,9 @@ export class TestRoom extends Scene
         // Keyboard: arrow keys for walking, Q W E reserved for later.
         this.cursors = this.input.keyboard.createCursorKeys();
         this.keys = this.input.keyboard.addKeys('Q,W,E');
+
+        // Start the overlay (q/w/e circles) on top of the room.
+        this.scene.launch('Overlay');
     }
 
     update ()
