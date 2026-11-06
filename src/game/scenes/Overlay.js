@@ -30,5 +30,28 @@ export class Overlay extends Scene
                 color: '#ffffff'
             }).setOrigin(0.5);
         });
+
+        // Enter key symbol: small rectangle in the bottom right corner.
+        const w = this.scale.width;
+        const h = this.scale.height;
+        const enterX = w - 20;
+        const enterY = h - 14;
+
+        this.add.rectangle(enterX, enterY, 24, 16, 0x333333).setStrokeStyle(1, 0xffffff);
+        this.add.text(enterX, enterY, '↵', {
+            fontFamily: 'Arial',
+            fontSize: 12,
+            color: '#ffffff'
+        }).setOrigin(0.5);
+
+        // Menu screen: an empty placeholder panel, hidden at the start.
+        this.menu = this.add.rectangle(w / 2, h / 2, w - 80, h - 60, 0x222222, 0.9)
+            .setStrokeStyle(1, 0xffffff)
+            .setVisible(false);
+
+        // Pressing Enter opens the menu, pressing it again closes it.
+        this.input.keyboard.on('keydown-ENTER', () => {
+            this.menu.setVisible(!this.menu.visible);
+        });
     }
 }
