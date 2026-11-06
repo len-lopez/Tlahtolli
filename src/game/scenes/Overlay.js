@@ -7,8 +7,12 @@ const SLOT_KEYS = [ 'q', 'w', 'e' ];
 // How long the player has to catch a biting fish, in milliseconds.
 const MINIGAME_TIME = 5000;
 
-// After a failed catch: how long the boxes show the right order, in milliseconds.
+// After a failed catch: how long the boxes stay on screen, in milliseconds
+// (counted from the moment it failed, shaking included).
 const REVEAL_TIME = 1500;
+
+// After pressing a wrong box: how long the boxes shake, in milliseconds.
+const SHAKE_TIME = 300;
 
 // Size of the q/w/e boxes in the minigame, and the space between them.
 const BOX_WIDTH = 64;
@@ -321,6 +325,13 @@ export class Overlay extends Scene
     // Called by the room when the line is pulled in.
     endFishing ()
     {
+        // While the right word order is being shown after a failed catch,
+        // the overlay stays as it is; the display ends by itself.
+        if (this.mode === 'reveal')
+        {
+            return;
+        }
+
         this.closeMinigame();
         this.mode = 'play';
         this.qweButtons.setVisible(true);
@@ -397,7 +408,8 @@ export class Overlay extends Scene
             next: 0,                  // which part has to be pressed next (0, 1 or 2)
             timeLeft: MINIGAME_TIME,
             bar,
-            barWidth
+            barWidth,
+            timers: []                // things waiting to happen later (cancelled when it closes)
         };
 
         this.mode = 'minigame';
@@ -419,7 +431,7 @@ export class Overlay extends Scene
         if (pressed.used || pressed.part !== game.parts[game.next])
         {
             // Wrong box: the fish gets away.
-            this.finishMinigame(false);
+            this.finishMinigame(false, true);
             return;
         }
 
@@ -465,24 +477,64 @@ export class Overlay extends Scene
     }
 
     // Ends the minigame and tells the room whether the fish was caught.
-    finishMinigame (success)
+    // wrongBox = true if it failed because a wrong box was pressed (not because time ran out).
+    finishMinigame (success, wrongBox = false)
     {
-        if (!success)
+        if (success)
         {
-            this.showRightOrder();
+            this.closeMinigame();
+            this.scene.get('TestRoom').fishingResult(true);
             return;
         }
 
-        this.closeMinigame();
-        this.scene.get('TestRoom').fishingResult(true);
+        // Failed: show the right order for a moment.
+        // q/w/e powers and the menu stay locked until it's over, but you can walk.
+        const game = this.minigame;
+        this.mode = 'reveal';
+
+        if (wrongBox)
+        {
+            // Wrong box: all boxes shake first, then slide into the right order.
+            this.shakeBoxes();
+            game.timers.push(this.time.delayedCall(SHAKE_TIME, () => this.showRightOrder()));
+        }
+        else
+        {
+            this.showRightOrder();
+        }
+
+        // When the display is over: remove it and give the powers back.
+        game.timers.push(this.time.delayedCall(REVEAL_TIME, () => {
+            this.closeMinigame();
+            this.mode = 'play';
+            this.qweButtons.setVisible(true);
+        }));
+
+        // The line is pulled in right away and the fish gets away.
+        this.scene.get('TestRoom').fishingResult(false);
     }
 
-    // After a failed catch: the boxes slide into the right order for a moment,
-    // to remind you of the word. Then the fish gets away.
+    // All three boxes shake quickly left and right: "that was wrong".
+    shakeBoxes ()
+    {
+        Object.values(this.minigame.boxes).forEach((b) => {
+            const x = this.boxSlotX(b.slot);
+            this.tweens.killTweensOf(b.holder);
+            this.tweens.add({
+                targets: b.holder,
+                x: { from: x - 3, to: x + 3 },
+                duration: SHAKE_TIME / 6,
+                yoyo: true,
+                repeat: 2
+            });
+        });
+    }
+
+    // After a failed catch: the boxes slide into the right order,
+    // to remind you of the word.
     showRightOrder ()
     {
         const game = this.minigame;
-        this.mode = 'reveal'; // keys do nothing while the right order is shown
 
         // Give every box the slot of its part in the word.
         // (If two parts are the same, each gets its own slot.)
@@ -495,11 +547,6 @@ export class Overlay extends Scene
             b.slot = slot;
             this.moveBox(b);
         });
-
-        game.revealTimer = this.time.delayedCall(REVEAL_TIME, () => {
-            this.closeMinigame();
-            this.scene.get('TestRoom').fishingResult(false);
-        });
     }
 
     // Removes the minigame from the screen.
@@ -507,10 +554,8 @@ export class Overlay extends Scene
     {
         if (this.minigame)
         {
-            if (this.minigame.revealTimer)
-            {
-                this.minigame.revealTimer.remove();
-            }
+            // Cancel anything that was still waiting to happen.
+            this.minigame.timers.forEach((timer) => timer.remove());
             this.minigame.ui.destroy();
             this.minigame = null;
         }
