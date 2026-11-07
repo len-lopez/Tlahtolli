@@ -12,6 +12,34 @@ const SLOT_KEYS = [ 'q', 'w', 'e' ];
 // How long the player has to catch a biting fish, in milliseconds.
 const MINIGAME_TIME = 5000;
 
+// Which minigame you get after pulling in a fish, and how often.
+// The numbers only matter compared to each other: 50 and 50 = half the time each;
+// 75 and 25 would be three out of four times the word order puzzle.
+// order  = put the three parts of the word in the right order
+// choice = pick the right color word out of three
+const MINIGAME_CHANCES = {
+    order: 50,
+    choice: 50
+};
+
+// Picks one name from a list of chances like MINIGAME_CHANCES (see above).
+function pickByChance (chances)
+{
+    const names = Object.keys(chances);
+    const total = names.reduce((sum, name) => sum + chances[name], 0);
+    let spin = Math.random() * total;
+
+    for (const name of names)
+    {
+        spin -= chances[name];
+        if (spin < 0)
+        {
+            return name;
+        }
+    }
+    return names[names.length - 1];
+}
+
 // After a failed catch: how long the boxes stay on screen, in milliseconds
 // (counted from the moment it failed, shaking included).
 const REVEAL_TIME = 1500;
@@ -1275,6 +1303,15 @@ export class Overlay extends Scene
         const w = this.scale.width;
         const h = this.scale.height;
 
+        // Which minigame this time: 'order' or 'choice' (see MINIGAME_CHANCES).
+        // The color choice needs at least two other words to choose from;
+        // if the word list is too short, it's always the word order puzzle.
+        let kind = pickByChance(MINIGAME_CHANCES);
+        if (fishingWords.length < 3)
+        {
+            kind = 'order';
+        }
+
         // The word in lowercase, cut into three parts.
         // If the word list says how to split the word ("parts"), use that;
         // otherwise cut it into three parts of about the same length.
@@ -1282,12 +1319,24 @@ export class Overlay extends Scene
         const parts = entry.parts
             ? entry.parts.map((part) => part.toLowerCase())
             : splitIntoThree(entry.word.toLowerCase());
-        // Mix the parts for the boxes. If they come out in the right order by chance,
-        // mix them once more: so the right order still can happen, but much less often.
-        let mixed = shuffle(parts);
-        if (sameOrder(mixed, parts))
+
+        // What's written in the three boxes (q, w, e from left to right).
+        let labels;
+        if (kind === 'order')
         {
-            mixed = shuffle(parts);
+            // The three parts, mixed. If they come out in the right order by chance,
+            // mix them once more: so the right order still can happen, but much less often.
+            labels = shuffle(parts);
+            if (sameOrder(labels, parts))
+            {
+                labels = shuffle(parts);
+            }
+        }
+        else
+        {
+            // The fish's color word and two other color words picked at random, all mixed up.
+            const others = shuffle(fishingWords.filter((e) => e !== entry)).slice(0, 2);
+            labels = shuffle([ entry, ...others ]).map((e) => e.word.toLowerCase());
         }
 
         // Everything on screen for the minigame goes into one container,
@@ -1299,8 +1348,8 @@ export class Overlay extends Scene
         const boxes = {};
 
         SLOT_KEYS.forEach((letter, i) => {
-            // Each box (rectangle + key letter + word part) is its own little container,
-            // so all three pieces move together when the box moves.
+            // Each box (rectangle + key letter + word part or color word) is its own
+            // little container, so all three pieces move together when the box shakes.
             // slot 0, 1, 2  ->  left, middle, right
             const holder = this.add.container(this.boxSlotX(i), boxY);
 
@@ -1308,11 +1357,11 @@ export class Overlay extends Scene
                 .setStrokeStyle(1, 0xffffff);
             const keyLabel = this.add.text(-BOX_WIDTH / 2 + 3, -BOX_HEIGHT / 2 + 1, letter,
                 { ...TEXT_STYLE, fontSize: 9 });
-            const partLabel = this.add.text(0, 2, mixed[i], TEXT_STYLE).setOrigin(0.5);
+            const partLabel = this.add.text(0, 2, labels[i], TEXT_STYLE).setOrigin(0.5);
 
             holder.add([ box, keyLabel, partLabel ]);
             ui.add(holder);
-            boxes[letter] = { holder, box, part: mixed[i], slot: i, used: false };
+            boxes[letter] = { holder, box, part: labels[i], slot: i, used: false };
         });
 
         // --- The word, spelled out above the boxes one part at a time ---
@@ -1335,6 +1384,7 @@ export class Overlay extends Scene
         ui.add([ barBack, bar ]);
 
         this.minigame = {
+            kind,                     // 'order' or 'choice'
             entry,                    // the word from src/data/fishing-words.json
             ui,
             boxes,
@@ -1368,6 +1418,25 @@ export class Overlay extends Scene
         const game = this.minigame;
         const pressed = game.boxes[letter];
 
+        if (game.kind === 'choice')
+        {
+            // Color choice: one press decides it.
+            // Right word: the box turns green and the fish is caught.
+            // Wrong word: the box turns red and the fish gets away.
+            if (pressed.part === game.entry.word.toLowerCase())
+            {
+                pressed.box.setFillStyle(COLOR_CORRECT);
+                this.finishMinigame(true);
+            }
+            else
+            {
+                pressed.box.setFillStyle(COLOR_WRONG);
+                this.finishMinigame(false);
+            }
+            return;
+        }
+
+        // Word order puzzle from here on.
         if (pressed.used || pressed.part !== game.parts[game.next])
         {
             // Wrong box: it turns red, and the fish gets away.
