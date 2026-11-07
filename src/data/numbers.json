@@ -1,0 +1,22 @@
+[
+    { "number": 1,  "word": "Ce",                   "meaning": "One" },
+    { "number": 2,  "word": "Ome",                  "meaning": "Two" },
+    { "number": 3,  "word": "Eyi",                  "meaning": "Three" },
+    { "number": 4,  "word": "Nahui",                "meaning": "Four",      "parts": [ "na", "hu", "i" ] },
+    { "number": 5,  "word": "Macuilli",             "meaning": "Five",      "parts": [ "ma", "cuil", "li" ] },
+    { "number": 6,  "word": "Chicuace",             "meaning": "Six",       "parts": [ "chi", "cua", "ce" ] },
+    { "number": 7,  "word": "Chicome",              "meaning": "Seven",     "parts": [ "chi", "co", "me" ] },
+    { "number": 8,  "word": "Chicueyi",             "meaning": "Eight",     "parts": [ "chi", "cue", "yi" ] },
+    { "number": 9,  "word": "Chiucnahui",           "meaning": "Nine",      "parts": [ "chiuc", "na", "hui" ] },
+    { "number": 10, "word": "Mahtlactli",           "meaning": "Ten",       "parts": [ "mah", "tlac", "tli" ] },
+    { "number": 11, "word": "Mahtlactli once",      "meaning": "Eleven",    "parts": [ "mahtlactli", "on", "ce" ] },
+    { "number": 12, "word": "Mahtlactli omome",     "meaning": "Twelve",    "parts": [ "mahtlactli", "om", "ome" ] },
+    { "number": 13, "word": "Mahtlactli omeyi",     "meaning": "Thirteen",  "parts": [ "mahtlactli", "om", "eyi" ] },
+    { "number": 14, "word": "Mahtlactli onnahui",   "meaning": "Fourteen",  "parts": [ "mahtlactli", "on", "nahui" ] },
+    { "number": 15, "word": "Caxtolli",             "meaning": "Fifteen",   "parts": [ "cax", "tol", "li" ] },
+    { "number": 16, "word": "Caxtolli once",        "meaning": "Sixteen",   "parts": [ "caxtolli", "on", "ce" ] },
+    { "number": 17, "word": "Caxtolli omome",       "meaning": "Seventeen", "parts": [ "caxtolli", "om", "ome" ] },
+    { "number": 18, "word": "Caxtolli omeyi",       "meaning": "Eighteen",  "parts": [ "caxtolli", "om", "eyi" ] },
+    { "number": 19, "word": "Caxtolli onnahui",     "meaning": "Nineteen",  "parts": [ "caxtolli", "on", "nahui" ] },
+    { "number": 20, "word": "Cempohualli",          "meaning": "Twenty",    "parts": [ "cem", "pohual", "li" ] }
+]

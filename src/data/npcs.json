@@ -13,6 +13,17 @@
             { "slot": "item", "end": "." },
             { "nah": "Then come back and report to me.", "en": "Then come back and report to me." }
         ] },
-        "countedAll": { "nah": "(demo) Did you count them all?", "en": "Did you count them all?" }
+        "countedAll": { "nah": "(demo) Did you count them all?", "en": "Did you count them all?" },
+        "howMany": { "words": [
+            { "nah": "(demo) How many", "en": "How many" },
+            { "slot": "item", "end": "" },
+            { "nah": "are there?", "en": "are there?" }
+        ] },
+        "paid": { "nah": "(demo) Well done! Here is your cacao.", "en": "Well done! Here is your cacao." },
+        "requestAgain": { "nah": "(demo) Will you count something else for me?", "en": "Will you count something else for me?" },
+        "allDone": { "nah": "(demo) Thank you, that is everything.", "en": "Thank you, that is everything." },
+        "countAgain": { "nah": "(demo) That's not right. Go and count again.", "en": "That's not right. Go and count again." },
+        "deceive": { "nah": "(demo) Are you trying to deceive me?", "en": "Are you trying to deceive me?" },
+        "goAway": { "nah": "(demo) Go away!", "en": "Go away!" }
     }
 }
