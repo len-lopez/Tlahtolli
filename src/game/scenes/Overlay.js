@@ -120,6 +120,11 @@ export class Overlay extends Scene
             const y = centerY + (i - 1) * spacing;
 
             const circle = this.add.circle(x, y, radius, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
+
+            // Clicking the circle does the same as pressing its key
+            // (holding Shift while clicking empties the slot, like Shift + key).
+            circle.setInteractive({ useHandCursor: true });
+            circle.on('pointerdown', (pointer) => this.clickSlot(letter, pointer));
             const label = this.add.text(x, y, letter, TEXT_STYLE).setOrigin(0.5);
 
             // Shows the word next to the circle when the slot is used.
@@ -134,8 +139,12 @@ export class Overlay extends Scene
         const enterX = w - 20;
         const enterY = h - 14;
 
-        this.add.rectangle(enterX, enterY, 24, 16, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
+        const enterBox = this.add.rectangle(enterX, enterY, 24, 16, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
         this.add.text(enterX, enterY, '↵', TEXT_STYLE).setOrigin(0.5);
+
+        // Clicking the Enter symbol does the same as pressing Enter.
+        enterBox.setInteractive({ useHandCursor: true });
+        enterBox.on('pointerdown', () => this.handleKey({ key: 'Enter', repeat: false, shiftKey: false }));
 
         // --- Menu screen, hidden at the start ---
         // It has several pages; only one is shown at a time:
@@ -266,6 +275,19 @@ export class Overlay extends Scene
             // q/w/e on a used slot: do whatever the word does.
             this.useSlot(letter);
         }
+    }
+
+    // A q/w/e circle on the left was clicked: same as pressing that key.
+    clickSlot (letter, pointer)
+    {
+        // Clicks only count while walking around
+        // (not while typing a word, fishing, or in the menu).
+        if (this.mode !== 'play' || !this.qweButtons.visible)
+        {
+            return;
+        }
+
+        this.handleKey({ key: letter, repeat: false, shiftKey: pointer.event.shiftKey });
     }
 
     // Looks up the word's action in the word list and tells the room to do it.
@@ -460,6 +482,9 @@ export class Overlay extends Scene
         this.updatePromptText();
         this.prompt.setVisible(true);
 
+        // The q/w/e circles are hidden while typing.
+        this.qweButtons.setVisible(false);
+
         // The room stops but stays visible behind the prompt.
         this.scene.pause('TestRoom');
     }
@@ -499,6 +524,7 @@ export class Overlay extends Scene
         }
 
         this.prompt.setVisible(false);
+        this.qweButtons.setVisible(true);
         this.mode = 'play';
         this.promptSlot = null;
         this.scene.resume('TestRoom');
