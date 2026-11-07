@@ -1,6 +1,8 @@
 import { Scene } from 'phaser';
 import wordList from '../../data/wordlist.json';
 import fishingWords from '../../data/fishing-words.json';
+import menuText from '../../data/menu.json';
+import { createSave, downloadSave, pickSaveFile } from '../save.js';
 
 const SLOT_KEYS = [ 'q', 'w', 'e' ];
 
@@ -65,6 +67,11 @@ const TEXT_STYLE = {
     color: '#ffffff'
 };
 
+// Where the lines of the menu pages start on screen, and the space between lines.
+const LIST_LEFT = 60;
+const LIST_TOP = 45;
+const LINE_HEIGHT = 16;
+
 // The overlay is its own scene that is drawn on top of the room.
 // It never moves with the map, so it always stays in the same place on screen.
 export class Overlay extends Scene
@@ -126,22 +133,30 @@ export class Overlay extends Scene
         this.add.rectangle(enterX, enterY, 24, 16, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
         this.add.text(enterX, enterY, '↵', TEXT_STYLE).setOrigin(0.5);
 
-        // --- Menu screen: shows the word list, hidden at the start ---
+        // --- Menu screen, hidden at the start ---
+        // It has several pages; only one is shown at a time:
+        // 'main'  = Profile, Bag, Word List, Save
+        // 'words' = the word list
+        // 'save'  = download / upload a save file
         this.menu = this.add.container(0, 0).setVisible(false);
 
         const panel = this.add.rectangle(w / 2, h / 2, w - 80, h - 60, 0x222222, 0.9)
             .setStrokeStyle(1, 0xffffff);
         this.menu.add(panel);
 
-        // One line of text per entry in src/data/wordlist.json
-        const listLeft = 60;
-        const listTop = 45;
-        const lineHeight = 16;
+        this.pages = {
+            main: this.makeChoicePage(menuText.main),
+            words: this.makeWordListPage(),
+            save: this.makeChoicePage(menuText.save)
+        };
 
-        wordList.forEach((entry, i) => {
-            const line = this.add.text(listLeft, listTop + i * lineHeight, entry.word, TEXT_STYLE);
-            this.menu.add(line);
-        });
+        // Message under the save choices, e.g. when an uploaded file isn't a save file.
+        this.saveMessage = this.add.text(LIST_LEFT, LIST_TOP + 3 * LINE_HEIGHT, '', TEXT_STYLE);
+        this.pages.save.container.add(this.saveMessage);
+
+        Object.values(this.pages).forEach((page) => this.menu.add(page.container));
+
+        this.page = 'main'; // which page is shown
 
         // --- Text prompt: a small box for typing a word, hidden at the start ---
         this.prompt = this.add.container(0, 0).setVisible(false);
@@ -156,6 +171,10 @@ export class Overlay extends Scene
 
         // Every key press goes through here.
         this.input.keyboard.on('keydown', (event) => this.handleKey(event));
+
+        // When the overlay is restarted (after loading a save file),
+        // stop listening with the old one so no key is handled twice.
+        this.events.once('shutdown', () => this.input.keyboard.off('keydown'));
     }
 
     handleKey (event)
@@ -184,9 +203,15 @@ export class Overlay extends Scene
             return;
         }
 
+        if (this.mode === 'menu')
+        {
+            this.handleMenuKey(event);
+            return;
+        }
+
         if (event.key === 'Enter')
         {
-            this.toggleMenu();
+            this.openMenu();
             return;
         }
 
@@ -232,23 +257,152 @@ export class Overlay extends Scene
         }
     }
 
-    toggleMenu ()
+    // ---------- Menu ----------
+
+    // A menu page with a list of choices, e.g. Profile / Bag / Word List / Save.
+    // items come from src/data/menu.json. The chosen line has a colored bar behind it.
+    makeChoicePage (items)
     {
-        const opening = this.mode === 'play';
+        const container = this.add.container(0, 0);
 
-        this.mode = opening ? 'menu' : 'play';
-        this.menu.setVisible(opening);
-        this.qweButtons.setVisible(!opening);
+        const highlight = this.add.rectangle(LIST_LEFT - 4, LIST_TOP - 1, 160, LINE_HEIGHT - 1, COLOR_USED)
+            .setOrigin(0, 0);
+        container.add(highlight);
 
-        // Pause the room while the menu is open, continue when it closes.
-        if (opening)
+        items.forEach((item, i) => {
+            container.add(this.add.text(LIST_LEFT, LIST_TOP + i * LINE_HEIGHT, item.label, TEXT_STYLE));
+        });
+
+        return { container, items, highlight, chosen: 0 };
+    }
+
+    // The word list page: one line of text per entry in src/data/wordlist.json.
+    makeWordListPage ()
+    {
+        const container = this.add.container(0, 0);
+
+        wordList.forEach((entry, i) => {
+            container.add(this.add.text(LIST_LEFT, LIST_TOP + i * LINE_HEIGHT, entry.word, TEXT_STYLE));
+        });
+
+        return { container, items: [], highlight: null, chosen: 0 };
+    }
+
+    openMenu ()
+    {
+        this.mode = 'menu';
+        this.menu.setVisible(true);
+        this.qweButtons.setVisible(false);
+
+        // The menu always opens on the main page, with the first choice marked.
+        this.pages.main.chosen = 0;
+        this.showPage('main');
+
+        // The room stops while the menu is open.
+        this.scene.pause('TestRoom');
+    }
+
+    closeMenu ()
+    {
+        this.mode = 'play';
+        this.menu.setVisible(false);
+        this.qweButtons.setVisible(true);
+        this.scene.resume('TestRoom');
+    }
+
+    // Shows one menu page and hides the others.
+    showPage (name)
+    {
+        this.page = name;
+        Object.entries(this.pages).forEach(([ key, page ]) => page.container.setVisible(key === name));
+        this.saveMessage.setText('');
+        this.updateHighlight();
+    }
+
+    // Moves the colored bar to the chosen line.
+    updateHighlight ()
+    {
+        const page = this.pages[this.page];
+        if (page.highlight)
         {
-            this.scene.pause('TestRoom');
+            page.highlight.y = LIST_TOP - 1 + page.chosen * LINE_HEIGHT;
         }
-        else
+    }
+
+    // A key press while the menu is open:
+    // up/down = choose, q = confirm, w = back, Enter = close the menu.
+    handleMenuKey (event)
+    {
+        const key = event.key.toLowerCase();
+        const page = this.pages[this.page];
+
+        if (key === 'enter')
         {
-            this.scene.resume('TestRoom');
+            this.closeMenu();
         }
+        else if (key === 'arrowup' || key === 'arrowdown')
+        {
+            if (page.items.length === 0)
+            {
+                return; // nothing to choose on this page
+            }
+            const step = key === 'arrowup' ? -1 : 1;
+            // Stop at the first and last line.
+            page.chosen = Math.min(Math.max(page.chosen + step, 0), page.items.length - 1);
+            this.updateHighlight();
+        }
+        else if (key === 'q')
+        {
+            if (page.items.length > 0)
+            {
+                this.confirmChoice(page.items[page.chosen].id);
+            }
+        }
+        else if (key === 'w')
+        {
+            if (this.page === 'main')
+            {
+                this.closeMenu();
+            }
+            else
+            {
+                this.showPage('main');
+            }
+        }
+    }
+
+    // q was pressed on a menu line. id comes from src/data/menu.json.
+    confirmChoice (id)
+    {
+        if (id === 'words')
+        {
+            this.showPage('words');
+        }
+        else if (id === 'save')
+        {
+            this.pages.save.chosen = 0;
+            this.showPage('save');
+        }
+        else if (id === 'download')
+        {
+            downloadSave(createSave());
+        }
+        else if (id === 'upload')
+        {
+            pickSaveFile(
+                (save) => this.loadSave(save),
+                () => this.saveMessage.setText(menuText.messages.badFile)
+            );
+        }
+        // 'profile' and 'bag' do nothing yet.
+    }
+
+    // Starts the room again from the beginning with the loaded save file.
+    // Everything that is made at random (like the fish) is made new.
+    // The overlay is restarted by the room, so the menu is closed afterwards.
+    loadSave (save)
+    {
+        this.scene.start('TestRoom', { save });
     }
 
     openPrompt (letter)

@@ -1,0 +1,15 @@
+{
+    "main": [
+        { "id": "profile", "label": "Profile" },
+        { "id": "bag", "label": "Bag" },
+        { "id": "words", "label": "Word List" },
+        { "id": "save", "label": "Save" }
+    ],
+    "save": [
+        { "id": "download", "label": "Download save file" },
+        { "id": "upload", "label": "Upload save file" }
+    ],
+    "messages": {
+        "badFile": "This file is not a Tlahtolli save file."
+    }
+}

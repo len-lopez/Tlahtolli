@@ -103,17 +103,23 @@ export class TestRoom extends Scene
         super('TestRoom');
     }
 
-    create ()
+    // data.save is the save file that was just uploaded, or nothing when the game starts fresh.
+    // Nothing from it is used yet; once we decide what gets saved, it's put back here.
+    create (data)
     {
         // Placeholder tiles, drawn in code, side by side in one picture:
         // tile 0 = floor (brown square), tile 1 = water (blue square).
-        const g = this.add.graphics();
-        g.fillStyle(0x8b5a2b);
-        g.fillRect(0, 0, TILE, TILE);
-        g.fillStyle(0x2f6fb5);
-        g.fillRect(TILE, 0, TILE, TILE);
-        g.generateTexture('placeholder-tiles', TILE * 2, TILE);
-        g.destroy();
+        // Only drawn once: when the room restarts after loading, the picture already exists.
+        if (!this.textures.exists('placeholder-tiles'))
+        {
+            const g = this.add.graphics();
+            g.fillStyle(0x8b5a2b);
+            g.fillRect(0, 0, TILE, TILE);
+            g.fillStyle(0x2f6fb5);
+            g.fillRect(TILE, 0, TILE, TILE);
+            g.generateTexture('placeholder-tiles', TILE * 2, TILE);
+            g.destroy();
+        }
 
         // Build the tile map from all rooms next to each other.
         const grid = joinRoomsSideBySide(ROOMS);
@@ -148,7 +154,14 @@ export class TestRoom extends Scene
 
         // Move the eye after the player has moved in each frame,
         // so it never lags behind.
-        this.events.on('postupdate', () => this.updateFace());
+        this.events.on('postupdate', this.updateFace, this);
+
+        // When the room restarts (after loading a save file), stop the old eye-moving,
+        // otherwise it would run twice.
+        this.events.once('shutdown', () => this.events.off('postupdate', this.updateFace, this));
+
+        // No "that didn't work" wobble running yet.
+        this.failWobble = null;
 
         // Remembered for fishing: the ground layer (to look up tiles) and where the ground starts.
         this.floor = floor;
@@ -191,6 +204,7 @@ export class TestRoom extends Scene
 
         // The room the player is in right now (0 = room 1, 1 = room 2).
         this.currentRoom = 0;
+        this.cameras.main.setScroll(0, 0);
 
         // Keyboard: arrow keys for walking.
         // (Q, W, E and Enter are handled in the overlay.)
