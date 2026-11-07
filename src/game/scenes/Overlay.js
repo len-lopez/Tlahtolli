@@ -482,6 +482,9 @@ export class Overlay extends Scene
         this.updatePromptText();
         this.prompt.setVisible(true);
 
+        // The q/w/e circles are hidden while typing.
+        this.qweButtons.setVisible(false);
+
         // The room stops but stays visible behind the prompt.
         this.scene.pause('TestRoom');
     }
@@ -521,6 +524,7 @@ export class Overlay extends Scene
         }
 
         this.prompt.setVisible(false);
+        this.qweButtons.setVisible(true);
         this.mode = 'play';
         this.promptSlot = null;
         this.scene.resume('TestRoom');
