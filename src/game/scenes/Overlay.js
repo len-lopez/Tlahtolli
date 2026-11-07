@@ -450,10 +450,10 @@ export class Overlay extends Scene
         if (this.mode === 'fishing')
         {
             // Line is out: the powers and the menu can't be used,
-            // but the key that cast the line pulls it in early (cancel).
+            // but the key that cast the line pulls it (Quixtia). See pullLine in TestRoom.
             if (event.key.toLowerCase() === this.fishingSlot)
             {
-                this.scene.get('TestRoom').stopFishing();
+                this.scene.get('TestRoom').pullLine();
             }
             return;
         }
@@ -535,9 +535,9 @@ export class Overlay extends Scene
     clickSlot (letter, pointer)
     {
         // Clicks only count while walking around (not while typing a word or in the menu),
-        // and while fishing only on the circle the line was cast with (= cancel).
-        const cancelFishing = this.mode === 'fishing' && letter === this.fishingSlot;
-        if ((this.mode !== 'play' && !cancelFishing) || !this.qweButtons.visible)
+        // and while fishing only on the circle the line was cast with (= pull).
+        const pullFishing = this.mode === 'fishing' && letter === this.fishingSlot;
+        if ((this.mode !== 'play' && !pullFishing) || !this.qweButtons.visible)
         {
             return;
         }
@@ -1195,10 +1195,10 @@ export class Overlay extends Scene
     {
         this.mode = 'fishing';
 
-        // The key the line was cast with (q, w or e); pressing it again pulls the line in.
+        // The key the line was cast with (q, w or e); pressing it again pulls the line.
         this.fishingSlot = this.lastUsedSlot;
 
-        // Only that circle stays on screen, with "cancel" next to it instead of its word.
+        // Only that circle stays on screen, with "pull" (Quixtia) next to it instead of its word.
         // The other two are hidden.
         SLOT_KEYS.forEach((letter) => {
             const slot = this.slots[letter];
@@ -1207,7 +1207,7 @@ export class Overlay extends Scene
             slot.letterLabel.setVisible(keep);
             slot.wordLabel.setVisible(keep);
         });
-        this.setGlossLabel(this.slots[this.fishingSlot].wordLabel, menuText.buttons.cancel);
+        this.setGlossLabel(this.slots[this.fishingSlot].wordLabel, menuText.buttons.pull);
     }
 
     // Puts all three circles back to normal after fishing: visible, each with its own word.
@@ -1317,7 +1317,7 @@ export class Overlay extends Scene
 
         this.mode = 'minigame';
 
-        // A fish bit: the "cancel" circle goes away while the boxes are on screen
+        // The fish is pulled: the "pull" circle goes away while the boxes are on screen
         // (q/w/e are the minigame boxes now). The circles come back normal afterwards.
         this.qweButtons.setVisible(false);
         this.restoreSlots();
