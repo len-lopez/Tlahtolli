@@ -1,4 +1,4 @@
-import { Scene } from 'phaser';
+import { Scene, Geom } from 'phaser';
 import wordList from '../../data/wordlist.json';
 import fishingWords from '../../data/fishing-words.json';
 import menuText from '../../data/menu.json';
@@ -133,7 +133,7 @@ export class Overlay extends Scene
 
             this.qweButtons.add([ circle, label, wordLabel ]);
 
-            this.slots[letter] = { word: null, circle, wordLabel };
+            this.slots[letter] = { word: null, circle, letterLabel: label, wordLabel };
         });
 
         // --- Enter key symbol in the bottom right corner ---
@@ -170,10 +170,9 @@ export class Overlay extends Scene
             this.menu.add([ circle, letterText, labelText ]);
         });
 
-        // "close" sits just to the left of the Enter symbol (which is at w - 20, 24 pixels wide).
-        const closeText = this.add.text(w - 20 - 12 - 6, hintY, menuText.buttons.close, TEXT_STYLE)
-            .setOrigin(1, 0.5);
-        this.menu.add(closeText);
+        // Word just to the left of the Enter symbol (which is at w - 20, 24 pixels wide).
+        // It says what Enter does right now: "menu", "confirm" or "close" (see updateEnterLabel).
+        this.enterLabel = this.add.text(w - 20 - 12 - 6, hintY, '', TEXT_STYLE).setOrigin(1, 0.5);
 
         this.pages = {
             main: this.makeChoicePage('main', menuText.main),
@@ -320,8 +319,15 @@ export class Overlay extends Scene
         items.forEach((item, i) => {
             const line = this.add.text(LIST_LEFT, LIST_TOP + i * LINE_HEIGHT, item.label, TEXT_STYLE);
 
-            // Clickable; the mouse pointer turns into a hand over it.
-            line.setInteractive({ useHandCursor: true });
+            // Clickable on the whole blue bar, not just on the word.
+            // The area is measured from the word's top left corner, so it starts 4 pixels
+            // to the left and 1 pixel above it, exactly like the bar.
+            // The mouse pointer turns into a hand over it.
+            line.setInteractive({
+                hitArea: new Geom.Rectangle(-4, -1, MENU_WIDTH - 24, LINE_HEIGHT - 1),
+                hitAreaCallback: Geom.Rectangle.Contains,
+                useHandCursor: true
+            });
             line.on('pointerdown', () => this.clickChoice(name, i));
 
             container.add(line);
@@ -486,6 +492,10 @@ export class Overlay extends Scene
         // The circle being edited gets a thick yellow outline.
         this.slots[letter].circle.setStrokeStyle(2, COLOR_EDITING);
 
+        // The letters inside the circles disappear while typing
+        // (the circles and their words stay).
+        Object.values(this.slots).forEach((slot) => slot.letterLabel.setVisible(false));
+
         // The room stops but stays visible behind the prompt.
         this.scene.pause('TestRoom');
     }
@@ -527,8 +537,10 @@ export class Overlay extends Scene
         this.prompt.setVisible(false);
         this.mode = 'play';
 
-        // The edited circle gets its normal thin white outline back.
+        // The edited circle gets its normal thin white outline back,
+        // and the letters come back into the circles.
         this.slots[this.promptSlot].circle.setStrokeStyle(1, 0xffffff);
+        Object.values(this.slots).forEach((slot) => slot.letterLabel.setVisible(true));
         this.promptSlot = null;
         this.scene.resume('TestRoom');
     }
@@ -792,8 +804,28 @@ export class Overlay extends Scene
     }
 
     // Called every frame: runs the minigame timer.
+    // The word next to the Enter symbol, depending on what the player is doing:
+    // walking around = "menu", typing a word = "confirm", menu open = "close".
+    // While fishing Enter does nothing, so there's no word then.
+    updateEnterLabel ()
+    {
+        const words = {
+            play: menuText.buttons.menu,
+            prompt: menuText.buttons.confirm,
+            menu: menuText.buttons.close
+        };
+        const word = words[this.mode] ?? '';
+
+        if (this.enterLabel.text !== word)
+        {
+            this.enterLabel.setText(word);
+        }
+    }
+
     update (time, delta)
     {
+        this.updateEnterLabel();
+
         if (this.mode !== 'minigame' || !this.minigame)
         {
             return;
