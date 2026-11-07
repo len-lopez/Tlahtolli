@@ -1045,29 +1045,33 @@ export class TestRoom extends Scene
         }
     }
 
-    // Buys one of an item. Returns false (and changes nothing) if there aren't enough beans.
-    buyItem (id, price)
+    // Buys count pieces of an item, price = beans for one piece.
+    // Returns false (and changes nothing) if there aren't enough beans.
+    buyItem (id, price, count)
     {
-        if (this.beans < price)
+        const cost = price * count;
+        if (this.beans < cost)
         {
             return false;
         }
-        this.beans -= price;
-        this.addToBag(id, 1);
+        this.beans -= cost;
+        this.addToBag(id, count);
         this.scene.get('Overlay').showBeans(this.beans);
         return true;
     }
 
-    // Sells one of an item from the bag.
-    sellItem (id, price)
+    // Sells count pieces of an item from the bag, price = beans for one piece.
+    // Returns false (and changes nothing) if there aren't that many in the bag.
+    sellItem (id, price, count)
     {
-        if ((this.bag[id] ?? 0) < 1)
+        if ((this.bag[id] ?? 0) < count)
         {
-            return;
+            return false;
         }
-        this.bag[id] -= 1;
-        this.beans += price;
+        this.bag[id] -= count;
+        this.beans += price * count;
         this.scene.get('Overlay').showBeans(this.beans);
+        return true;
     }
 
     // Placeholder "caught it!" animation: the fish flies out of the water
