@@ -5,7 +5,7 @@
         "sells": [ "michin" ]
     },
     "judge": {
-        "line": { "nah": "Tianquizpan nitlayacanqui", "en": "I am the leader of the market." },
+        "line": { "nah": "Tianquizpan nitlayacanqui.", "en": "I am the leader of the market." },
         "inspect": { "nah": "Ca tianquizpan tlayacanqui.", "en": "It is the leader of the market." }
     }
 }

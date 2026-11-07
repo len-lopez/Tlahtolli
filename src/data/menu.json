@@ -37,7 +37,7 @@
     },
     "messages": {
         "badFile": { "nah": "Inin ahmo tlapialli.", "en": "This file is not a Tlahtolli save file." },
-        "nothingToInspect": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "nican.", "en": "here." } ] },
+        "nothingToInspect": { "words": [ { "nah": "Ahtle", "en": "Nothing" }, { "nah": "nican.", "en": "here." } ] },
         "notInterested": { "nah": "Ahmo nicnequi.", "en": "Not interested." },
         "notEnoughCacao": { "nah": "Ahmo ixachi in mocacahuauh.", "en": "Not enough cacao." },
         "boughtOne": { "words": [ { "nah": "Oticcouh", "en": "You bought" }, { "nah": "ce", "en": "one" }, { "slot": "item", "end": "." } ] },
@@ -45,7 +45,7 @@
         "soldOne": { "words": [ { "nah": "Oticnamac", "en": "You sold" }, { "nah": "ce", "en": "one" }, { "slot": "item", "end": "." } ] },
         "soldMany": { "words": [ { "nah": "Otiquinnamac", "en": "You sold" }, { "slot": "count" }, { "slot": "item", "end": "." } ] },
         "whatToBuy": { "words": [ { "nah": "Tlein", "en": "What" }, { "nah": "ticcohuaznequi?", "en": "do you want to buy?" } ] },
-        "whatToSell": { "words": [ { "nah": "Tle", "en": "What" }, { "nah": "ticnamacaznequi?", "en": "do you want to sell?" } ] },
-        "bagEmpty": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "ipan", "en": "inside" }, { "nah": "moxiquipil.", "en": "your bag." } ] }
+        "whatToSell": { "words": [ { "nah": "Tlein", "en": "What" }, { "nah": "ticnamacaznequi?", "en": "do you want to sell?" } ] },
+        "bagEmpty": { "words": [ { "nah": "Ahtle", "en": "Nothing" }, { "nah": "ipan", "en": "inside" }, { "nah": "moxiquipil.", "en": "your bag." } ] }
     }
 }
