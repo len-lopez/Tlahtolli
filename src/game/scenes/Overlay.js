@@ -1236,6 +1236,15 @@ export class Overlay extends Scene
         this.showGlossText(label);
     }
 
+    // Called by the room when a biting fish got away but the line stays out:
+    // "Quixtia" goes back to white.
+    endBite ()
+    {
+        const label = this.slots[this.fishingSlot].wordLabel;
+        label.gloss.color = null;
+        this.showGlossText(label);
+    }
+
     // Called by the room when the line is pulled in.
     endFishing ()
     {
