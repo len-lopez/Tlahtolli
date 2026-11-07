@@ -4,6 +4,10 @@
         "inspect": { "nah": "Ca pochtecatl.", "en": "It's a merchant." },
         "sells": [ "michin" ]
     },
+    "beanCounter": {
+        "inspect": { "nah": "(demo) He is counting cacao beans.", "en": "He is counting cacao beans." },
+        "sells": [ "michin" ]
+    },
     "judge": {
         "line": { "nah": "Tianquizpan nitlayacanqui.", "en": "I am the leader of the market." },
         "inspect": { "nah": "Ca tianquizpan tlayacanqui.", "en": "It's the leader of the market." },

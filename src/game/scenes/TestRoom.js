@@ -3,6 +3,7 @@ import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
 import plantText from '../../data/plants.json';
 import marketObjectText from '../../data/market-objects.json';
+import numberWords from '../../data/numbers.json';
 import { createProgress, recordAnswer } from '../progress.js';
 
 // Size of one tile in pixels. Tiled maps will use the same size later.
@@ -97,13 +98,16 @@ function buildMarketplaceGrid ()
 // headband = the color of a thin band near the top of the box, or null for none.
 // wares    = (merchants only) little piles of goods lying on the mat next to them:
 //            x = left/right of the merchant's middle, width/height in pixels, and color.
-// 5 merchants on the flat ground, 8 tiles apart (so their piles of counting objects
+// 5 merchants (the first one is the bean counter) on the flat ground, 8 tiles apart (so their piles of counting objects
 // have room), the marketplace leader on the plateau under the roof.
 const MARKET_NPCS = [
     { col: 5, type: 'judge', height: 17, color: 0xf0ead6, headband: 0xb22222, wares: [] },
     {
-        col: 24, type: 'merchant', height: 16, color: 0x9b5de5, headband: null,
-        wares: [ { x: -12, width: 6, height: 4, color: 0x6b8e23 }, { x: -6, width: 4, height: 3, color: 0x6b8e23 } ]
+        // The bean counter: a merchant who STANDS (as tall as the player) and keeps counting
+        // cacao beans (see startBeanCounting). Talking to him: he counts from 1 to 20.
+        // Instead of wares, his mat has the beans he's counting.
+        col: 24, type: 'beanCounter', height: 24, color: 0x9b5de5, headband: null,
+        wares: []
     },
     {
         col: 32, type: 'merchant', height: 15, color: 0x7b4fc4, headband: 0xf2c418,
@@ -167,6 +171,19 @@ const OBJECT_GAP = 1;    // space between two objects lying next to / on top of 
 const OBJECT_PILE_COLUMNS = 3;
 const OBJECT_PILE_ROWS = 2;
 const OBJECT_PILE_DISTANCE = MAT_WIDTH / 2 + 3;
+
+// --- The bean counter's beans ---
+// He moves the beans one by one from a pile on the left of his mat to a pile on the right,
+// then puts them all back and starts again.
+// Where each bean lies in the left pile (x = left/right of his middle, y = up from the mat).
+// The right pile is the same, mirrored.
+const COUNTED_BEANS = [ { x: -13, y: 0 }, { x: -9, y: 0 }, { x: -11, y: 2 }, { x: -14, y: 2 } ];
+const COUNTED_BEAN_WIDTH = 3;
+const COUNTED_BEAN_HEIGHT = 2;
+const COLOR_COUNTED_BEAN = 0x5a3a1a;
+const BEAN_COUNT_STEP = 700;   // milliseconds between two beans
+const BEAN_HOP_TIME = 400;     // how long one bean takes to fly over, in milliseconds
+const BEAN_HOP_HEIGHT = 12;    // how high it flies (his hand), in pixels above the mat
 
 // --- The leader's counting task ---
 // How many cacao beans the leader pays for each right answer.
@@ -830,6 +847,12 @@ export class TestRoom extends Scene
                     BACKREST_WIDTH, BACKREST_HEIGHT, COLOR_BACKREST).setDepth(-1);
             }
 
+            // The bean counter's beans, moving from one pile to the other.
+            if (npc.type === 'beanCounter')
+            {
+                this.startBeanCounting(x, matTop);
+            }
+
             // Wares lying on the mat.
             npc.wares.forEach((ware) => {
                 this.add.rectangle(x + ware.x, matTop - ware.height / 2, ware.width, ware.height, ware.color)
@@ -844,6 +867,56 @@ export class TestRoom extends Scene
             }
 
             return { box, type: npc.type };
+        });
+    }
+
+    // The bean counter's animation: little brown beans on his mat (see COUNTED_BEANS).
+    // Every BEAN_COUNT_STEP one bean hops in an arc over him from the left pile to the
+    // right pile. When all have moved, they jump back to the left pile and it starts again.
+    // x = his middle, matTop = the top of his mat (in pixels).
+    startBeanCounting (x, matTop)
+    {
+        const beans = COUNTED_BEANS.map((spot) =>
+            this.add.rectangle(x + spot.x, matTop - spot.y - COUNTED_BEAN_HEIGHT / 2,
+                COUNTED_BEAN_WIDTH, COUNTED_BEAN_HEIGHT, COLOR_COUNTED_BEAN).setDepth(-1));
+
+        let moved = 0; // how many beans are on the right pile right now
+
+        this.time.addEvent({
+            delay: BEAN_COUNT_STEP,
+            loop: true,
+            callback: () => {
+                if (moved === beans.length)
+                {
+                    // All counted: put them back on the left pile.
+                    beans.forEach((bean, i) => {
+                        bean.setPosition(x + COUNTED_BEANS[i].x,
+                            matTop - COUNTED_BEANS[i].y - COUNTED_BEAN_HEIGHT / 2);
+                    });
+                    moved = 0;
+                    return;
+                }
+
+                // The next bean flies to the same spot on the right pile (mirrored).
+                const bean = beans[moved];
+                const spot = COUNTED_BEANS[moved];
+                const landY = matTop - spot.y - COUNTED_BEAN_HEIGHT / 2;
+                // While flying it's drawn in front of him, so you can see it pass his hands.
+                bean.setDepth(1);
+                this.tweens.add({ targets: bean, x: x - spot.x, duration: BEAN_HOP_TIME });
+                this.tweens.add({
+                    targets: bean,
+                    y: matTop - BEAN_HOP_HEIGHT,
+                    duration: BEAN_HOP_TIME / 2,
+                    yoyo: true,
+                    ease: 'Sine.easeOut',
+                    onComplete: () => {
+                        bean.y = landY;
+                        bean.setDepth(-1);
+                    }
+                });
+                moved += 1;
+            }
         });
     }
 
@@ -988,6 +1061,12 @@ export class TestRoom extends Scene
                 return;
             }
 
+            if (npc.type === 'beanCounter')
+            {
+                this.countAloud(overlay, 0);
+                return;
+            }
+
             overlay.openDialogue(npcText[npc.type].line);
             return;
         }
@@ -997,6 +1076,19 @@ export class TestRoom extends Scene
             this.talking = null;
         });
         this.talking = { bubble, timer };
+    }
+
+    // The bean counter counts out loud: one dialogue box per number word, from 1 to 20
+    // (from src/data/numbers.json; clicking the word shows its gloss, e.g. "Three").
+    // q goes on to the next number; w stops counting at any time.
+    // i = which number word to say now (0 = the first one).
+    countAloud (overlay, i)
+    {
+        const entry = numberWords[i];
+        const isLast = i === numberWords.length - 1;
+        const next = isLast ? null : () => this.countAloud(overlay, i + 1);
+
+        overlay.openDialogue({ nah: entry.word, en: entry.meaning }, next, true);
     }
 
     // Forgets everything about the leader's counting task (when leaving the Marketplace).
@@ -1810,7 +1902,8 @@ export class TestRoom extends Scene
     // The lowest row is filled first, so nothing floats in the air.
     spawnMarketObjects ()
     {
-        this.npcs.filter((npc) => npc.type === 'merchant').forEach((npc) => {
+        // (The merchants are everyone who sells something, the bean counter too.)
+        this.npcs.filter((npc) => npcText[npc.type].sells).forEach((npc) => {
             // Which objects this merchant gets, e.g. [ A, A, B, C, C, C ], then shuffled.
             const objects = [];
             MARKET_OBJECTS.forEach((type) => {
