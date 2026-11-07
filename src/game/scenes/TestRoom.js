@@ -962,7 +962,19 @@ export class TestRoom extends Scene
         {
             // The NPC's speech animation, and the dialogue box with its line.
             this.speechAnimation(npc.box, 0);
-            this.scene.get('Overlay').openDialogue(npcText[npc.type].line);
+            const overlay = this.scene.get('Overlay');
+
+            if (npc.type === 'judge')
+            {
+                // The leader first says who he is, then asks for help surveying the
+                // merchandise (paid in cacao). Yes or no: for now, both just close the box.
+                overlay.openDialogue(npcText.judge.line, () => {
+                    overlay.openQuestion(npcText.judge.request, () => {}, () => {});
+                });
+                return;
+            }
+
+            overlay.openDialogue(npcText[npc.type].line);
             return;
         }
 

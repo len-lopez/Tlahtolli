@@ -402,6 +402,7 @@ export class Overlay extends Scene
         const advanceSign = this.add.text(advanceX, h - 52, '▶', { ...TEXT_STYLE, fontSize: 9 }).setOrigin(0.5);
         advanceBox.setInteractive({ useHandCursor: true });
         advanceBox.on('pointerdown', () => this.closeDialogue());
+        this.dialogueAdvance = [ advanceBox, advanceSign ]; // hidden while a question is asked
 
         const qCircle = this.add.circle(18, h - 14, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
         const qLetter = this.add.text(18, h - 14, 'q', TEXT_STYLE).setOrigin(0.5);
@@ -409,7 +410,27 @@ export class Overlay extends Scene
         this.makeGlossable(qLabel, 'dialogue');
         this.setGlossLabel(qLabel, menuText.buttons.confirm);
 
-        this.dialogue.add([ dialogueBox, this.dialogueText.container, advanceBox, advanceSign, qCircle, qLetter, qLabel ]);
+        // While the NPC asks a yes/no question (see openQuestion), there is also
+        // "(w) Ahmo" next to "(q) Quemah", and both circles can be clicked to answer.
+        // (Clicking the words still shows their glosses.)
+        const wCircle = this.add.circle(18 + 80, h - 14, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
+        const wLetter = this.add.text(18 + 80, h - 14, 'w', TEXT_STYLE).setOrigin(0.5);
+        const wLabel = this.add.text(34 + 80, h - 14, '', TEXT_STYLE).setOrigin(0, 0.5);
+        this.makeGlossable(wLabel, 'dialogue');
+        this.setGlossLabel(wLabel, menuText.buttons.no);
+        this.dialogueNo = [ wCircle, wLetter, wLabel ]; // only shown while a question is asked
+
+        qCircle.setInteractive({ useHandCursor: true });
+        qCircle.on('pointerdown', () => this.answerQuestion(true));
+        wCircle.setInteractive({ useHandCursor: true });
+        wCircle.on('pointerdown', () => this.answerQuestion(false));
+
+        this.dialogue.add([ dialogueBox, this.dialogueText.container, advanceBox, advanceSign,
+            qCircle, qLetter, qLabel, wCircle, wLetter, wLabel ]);
+
+        // The question being asked right now: { onYes, onNo }, or null when the box
+        // just shows a line (then q, w or the advance symbol simply close it).
+        this.dialogueQuestion = null;
 
         // --- Shop window: buying (Cohua) or selling (Namaca), hidden at the start ---
         // Looks like the menu: the same panel, a list with a blue bar on the chosen line,
@@ -535,8 +556,13 @@ export class Overlay extends Scene
         if (this.mode === 'dialogue')
         {
             // An NPC is talking: q or w closes the dialogue box. Everything else does nothing.
+            // If the NPC asked a yes/no question: q = yes, w = no.
             const key = event.key.toLowerCase();
-            if (key === 'q' || key === 'w')
+            if (this.dialogueQuestion && (key === 'q' || key === 'w'))
+            {
+                this.answerQuestion(key === 'q');
+            }
+            else if (key === 'q' || key === 'w')
             {
                 this.closeDialogue();
             }
@@ -2095,6 +2121,37 @@ export class Overlay extends Scene
         this.dialogue.setVisible(true);
         this.qweButtons.setVisible(false);
         this.dialogueAfterClose = afterClose;
+
+        // A normal line: advance symbol, only "(q) Quemah".
+        this.dialogueQuestion = null;
+        this.dialogueAdvance.forEach((thing) => thing.setVisible(true));
+        this.dialogueNo.forEach((thing) => thing.setVisible(false));
+    }
+
+    // Like openDialogue, but the NPC asks a yes/no question.
+    // The box shows "(q) Quemah  (w) Ahmo" and no advance symbol.
+    // onYes / onNo = what happens after the player answered (the box is closed first).
+    openQuestion (text, onYes, onNo)
+    {
+        this.openDialogue(text);
+        this.dialogueQuestion = { onYes, onNo };
+        this.dialogueAdvance.forEach((thing) => thing.setVisible(false));
+        this.dialogueNo.forEach((thing) => thing.setVisible(true));
+    }
+
+    // The player answered the question: yes = true (q), no = false (w).
+    // Closes the box, then does what was given for that answer.
+    answerQuestion (yes)
+    {
+        const question = this.dialogueQuestion;
+        if (this.mode !== 'dialogue' || !question)
+        {
+            return;
+        }
+
+        this.dialogueQuestion = null;
+        this.dialogueAfterClose = yes ? question.onYes : question.onNo;
+        this.closeDialogue();
     }
 
     // q, w (or a click on the advance symbol) closes the dialogue box.
