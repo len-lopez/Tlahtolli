@@ -1199,8 +1199,8 @@ export class TestRoom extends Scene
     // The cloth buyer says he wants to buy cloth, then asks: if you ask around the other
     // merchants and find him the best price, he'll pay you a commission. Will you?
     // Yes: the task starts (see startClothQuest). No: the box just closes.
-    // While the task is running, he asks which one is the lowest price you found,
-    // and you answer with the number minigame (see reportLowestPrice).
+    // While the task is running, he first asks if you found a good price yet; if you say yes,
+    // he asks which one is the lowest price you found, and you enter it (see reportLowestPrice).
     // The task can only be done once while you're in the Marketplace: afterwards he only
     // thanks you (or, if he gave up, says he'll look for cloth another day).
     talkToClothBuyer (overlay)
@@ -1209,7 +1209,9 @@ export class TestRoom extends Scene
 
         if (this.clothQuest)
         {
-            this.reportLowestPrice(overlay);
+            // First: "Did you find a good price yet?" Yes: you enter the lowest price.
+            // No: the box just closes (that's not a wrong answer; the task keeps running).
+            overlay.openQuestion(text.foundYet, () => this.reportLowestPrice(overlay), () => {});
             return;
         }
 
