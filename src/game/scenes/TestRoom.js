@@ -994,7 +994,7 @@ export class TestRoom extends Scene
     }
 
     // The fish has reached the float and bites: it shakes and the float dips under the water.
-    // Now the player has PULL_TIME to pull (Quixtia). If they don't, the fish gets away.
+    // Now the player has PULL_TIME to pull (Quixtia). If they don't, the fish swims away, but you keep fishing.
     startBite (fish)
     {
         const float = this.fishing.float;
@@ -1017,12 +1017,39 @@ export class TestRoom extends Scene
             repeat: -1
         });
 
-        // The fish is biting now. If nobody pulls in time, the line comes back empty.
+        // The fish is biting now. If nobody pulls in time, it lets go (see missBite).
         this.fishing.biting = true;
-        this.fishing.pullTimer = this.time.delayedCall(PULL_TIME, () => this.stopFishing());
+        this.fishing.pullTimer = this.time.delayedCall(PULL_TIME, () => this.missBite());
 
         // "Quixtia" changes color, so you know now is the time to pull.
         this.scene.get('Overlay').showBite();
+    }
+
+    // Nobody pulled in time: the fish lets go and swims away, but the line stays in the water.
+    // Everything starts over as if the float had just landed, so another fish
+    // gets interested after BITE_WAIT and bites by BITE_DEADLINE.
+    missBite ()
+    {
+        const fish = this.fishing.hookedFish;
+
+        // The fish stops shaking and swims on normally.
+        this.tweens.killTweensOf(fish.body);
+        fish.hooked = false;
+
+        // The float stops dipping and goes back onto the water's surface.
+        const float = this.fishing.float;
+        this.tweens.killTweensOf(float);
+        float.y = this.floorTop - 2;
+
+        // Start waiting again from zero.
+        this.fishing.hookedFish = null;
+        this.fishing.biting = false;
+        this.fishing.pullTimer = null;
+        this.fishing.waited = 0;
+        this.fishing.interestAt = randomBetween(BITE_WAIT, BITE_WAIT + INTEREST_WINDOW);
+
+        // "Quixtia" goes back to white.
+        this.scene.get('Overlay').endBite();
     }
 
     // The player pressed "pull" (Quixtia) while the line is out.
