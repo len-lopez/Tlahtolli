@@ -3,5 +3,5 @@
     { "word": "Michma", "action": "fish" },
     { "word": "Cochi", "action": "sleep" },
     { "word": "Ihtoa", "action": "talk" },
-    { "word": "Ittoa", "action": "inspect" }
+    { "word": "Itta", "action": "inspect" }
 ]

@@ -715,7 +715,7 @@ export class TestRoom extends Scene
         this.talking = { bubble, timer };
     }
 
-    // Ittoa: look at what's in front of the player. No animation; a dialogue box opens.
+    // Itta: look at what's in front of the player. No animation; a dialogue box opens.
     // For now only the Marketplace NPCs can be inspected (their "inspect" text in
     // src/data/npcs.json). Anywhere else, a placeholder text from src/data/menu.json.
     // (Uses the same reach as Ihtoa.)
