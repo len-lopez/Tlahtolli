@@ -6,13 +6,16 @@
 // Version 1: room only. Version 2: room and life points.
 // Version 3: same as 2, but the Marketplace was added on the left, so the room numbers changed
 // (the game converts older save files by itself, see "Start room" in TestRoom.js).
-const SAVE_VERSION = 3;
+// Version 4: also cacao beans and the bag.
+const SAVE_VERSION = 4;
 
 // Makes the contents of a new save file.
 // state = what the game wants to remember:
-//   room = the room the player is in (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors)
-//   life = how many life points (Yollotl) the player has left
-// More things (beans, bag, words, ...) will be added here later.
+//   room  = the room the player is in (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors)
+//   life  = how many life points (Yollotl) the player has left
+//   beans = how many cacao beans the player has
+//   bag   = how many of each item is in the bag, e.g. { michin: 3 }
+// More things (words, ...) will be added here later.
 export function createSave (state)
 {
     return {
@@ -20,7 +23,10 @@ export function createSave (state)
         version: SAVE_VERSION,
         savedAt: new Date().toISOString(),
         room: state.room,
-        life: state.life
+        life: state.life,
+        beans: state.beans,
+        // A copy of the bag, so the save file holds the numbers from this moment.
+        bag: { ...state.bag }
     };
 }
 

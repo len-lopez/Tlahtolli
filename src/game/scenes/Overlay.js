@@ -608,9 +608,15 @@ export class Overlay extends Scene
         }
         else if (id === 'download')
         {
-            // The save file remembers which room the player is in and how many life points are left.
+            // The save file remembers which room the player is in, how many life points are left,
+            // how many cacao beans the player has, and what's in the bag.
             const room = this.scene.get('TestRoom');
-            downloadSave(createSave({ room: room.currentRoom, life: room.life }));
+            downloadSave(createSave({
+                room: room.currentRoom,
+                life: room.life,
+                beans: room.beans,
+                bag: room.bag
+            }));
         }
         else if (id === 'upload')
         {
