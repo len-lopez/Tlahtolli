@@ -472,7 +472,13 @@ export class Overlay extends Scene
 
         // When the overlay is restarted (after loading a save file),
         // stop listening with the old one so no key is handled twice.
-        this.events.once('shutdown', () => this.input.keyboard.off('keydown'));
+        // (Same care as in the room: only if the keyboard is still there at that moment.)
+        this.events.once('shutdown', () => {
+            if (this.input.keyboard)
+            {
+                this.input.keyboard.off('keydown');
+            }
+        });
     }
 
     handleKey (event)

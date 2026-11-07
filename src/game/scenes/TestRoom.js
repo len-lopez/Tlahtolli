@@ -711,9 +711,16 @@ export class TestRoom extends Scene
         );
 
         // After every physics step, keep the player on the slope.
-        // (Stop doing that when the room restarts after loading a save file.)
+        // (Stop doing that when the room restarts after loading a save file.
+        // By the time the room shuts down, Phaser may already have removed the physics
+        // world, and with it this check; then there's nothing left to stop.)
         this.physics.world.on('worldstep', this.stickToSlope, this);
-        this.events.once('shutdown', () => this.physics.world.off('worldstep', this.stickToSlope, this));
+        this.events.once('shutdown', () => {
+            if (this.physics.world)
+            {
+                this.physics.world.off('worldstep', this.stickToSlope, this);
+            }
+        });
     }
 
     // Height of the slanted line (in pixels from the top of the screen) at a spot x.
