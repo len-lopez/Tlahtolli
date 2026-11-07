@@ -298,9 +298,10 @@ export class Overlay extends Scene
     // A q/w/e circle on the left was clicked: same as pressing that key.
     clickSlot (letter, pointer)
     {
-        // Clicks only count while walking around
-        // (not while typing a word, fishing, or in the menu).
-        if (this.mode !== 'play' || !this.qweButtons.visible)
+        // Clicks only count while walking around (not while typing a word or in the menu),
+        // and while fishing only on the circle the line was cast with (= cancel).
+        const cancelFishing = this.mode === 'fishing' && letter === this.fishingSlot;
+        if ((this.mode !== 'play' && !cancelFishing) || !this.qweButtons.visible)
         {
             return;
         }
@@ -582,10 +583,33 @@ export class Overlay extends Scene
     startFishing ()
     {
         this.mode = 'fishing';
-        this.qweButtons.setVisible(false);
 
         // The key the line was cast with (q, w or e); pressing it again pulls the line in.
         this.fishingSlot = this.lastUsedSlot;
+
+        // Only that circle stays on screen, with "cancel" next to it instead of its word.
+        // The other two are hidden.
+        SLOT_KEYS.forEach((letter) => {
+            const slot = this.slots[letter];
+            const keep = letter === this.fishingSlot;
+            slot.circle.setVisible(keep);
+            slot.letterLabel.setVisible(keep);
+            slot.wordLabel.setVisible(keep);
+        });
+        this.slots[this.fishingSlot].wordLabel.setText(menuText.buttons.cancel);
+    }
+
+    // Puts all three circles back to normal after fishing: visible, each with its own word.
+    // (Whether the whole row is shown is decided separately, with qweButtons.)
+    restoreSlots ()
+    {
+        SLOT_KEYS.forEach((letter) => {
+            const slot = this.slots[letter];
+            slot.circle.setVisible(true);
+            slot.letterLabel.setVisible(true);
+            slot.wordLabel.setVisible(true);
+            slot.wordLabel.setText(slot.word ?? '');
+        });
     }
 
     // Called by the room when the line is pulled in.
@@ -600,6 +624,7 @@ export class Overlay extends Scene
 
         this.closeMinigame();
         this.mode = 'play';
+        this.restoreSlots();
         this.qweButtons.setVisible(true);
     }
 
@@ -679,6 +704,11 @@ export class Overlay extends Scene
         };
 
         this.mode = 'minigame';
+
+        // A fish bit: the "cancel" circle goes away while the boxes are on screen
+        // (q/w/e are the minigame boxes now). The circles come back normal afterwards.
+        this.qweButtons.setVisible(false);
+        this.restoreSlots();
         return true;
     }
 
