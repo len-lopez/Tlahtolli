@@ -280,6 +280,12 @@ export class TestRoom extends Scene
         // (Not in the save file yet either, so loading a save also gives 0.)
         this.beans = 0;
 
+        // --- Bag ---
+        // How many of each item the player has, e.g. { michin: 3 }.
+        // The names (like "michin") are the ids in src/data/items.json.
+        // Starts empty. (Not in the save file yet, so loading a save also empties it.)
+        this.bag = {};
+
         // Keyboard: arrow keys for walking.
         // (Q, W, E and Enter are handled in the overlay.)
         this.cursors = this.input.keyboard.createCursorKeys();
@@ -581,11 +587,20 @@ export class TestRoom extends Scene
             this.fishes = this.fishes.filter((f) => f !== fish);
             this.fishing.hookedFish = null;
             this.showCatch(fish);
+
+            // Every caught fish, whatever its color, puts 1 Michin into the bag.
+            this.addToBag('michin', 1);
         }
 
         // Either way, the line is pulled in.
         // (If the fish wasn't caught, stopFishing lets it swim away.)
         this.stopFishing();
+    }
+
+    // Puts some of an item into the bag. id = the item's id in src/data/items.json.
+    addToBag (id, amount)
+    {
+        this.bag[id] = (this.bag[id] ?? 0) + amount;
     }
 
     // Placeholder "caught it!" animation: the fish flies out of the water
