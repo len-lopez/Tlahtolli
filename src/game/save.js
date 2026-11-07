@@ -6,14 +6,15 @@
 const SAVE_VERSION = 1;
 
 // Makes the contents of a new save file.
-// For now it only says "this is a Tlahtolli save" and which version it is;
-// the things that actually get saved (beans, bag, words, ...) will be added here later.
-export function createSave ()
+// state = what the game wants to remember. For now: { room } = the room the player is in
+// (0 = room 1, 1 = room 2). More things (beans, bag, words, ...) will be added here later.
+export function createSave (state)
 {
     return {
         game: 'tlahtolli',
         version: SAVE_VERSION,
-        savedAt: new Date().toISOString()
+        savedAt: new Date().toISOString(),
+        room: state.room
     };
 }
 

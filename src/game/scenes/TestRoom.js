@@ -104,7 +104,7 @@ export class TestRoom extends Scene
     }
 
     // data.save is the save file that was just uploaded, or nothing when the game starts fresh.
-    // Nothing from it is used yet; once we decide what gets saved, it's put back here.
+    // For now only the room is taken from it (see "Start room" further down).
     create (data)
     {
         // Placeholder tiles, drawn in code, side by side in one picture:
@@ -205,6 +205,17 @@ export class TestRoom extends Scene
         // The room the player is in right now (0 = room 1, 1 = room 2).
         this.currentRoom = 0;
         this.cameras.main.setScroll(0, 0);
+
+        // --- Start room ---
+        // After loading a save file, the player starts in the saved room,
+        // at the same spot as in room 1 (4 tiles from the room's left edge).
+        // The camera and the fish follow by themselves in the next frame (see update).
+        // A save file without a room, or with a room that doesn't exist, starts in room 1.
+        const savedRoom = data && data.save ? data.save.room : 0;
+        if (Number.isInteger(savedRoom) && savedRoom > 0 && savedRoom < ROOMS.length)
+        {
+            this.player.body.reset(savedRoom * ROOM_WIDTH * TILE + 4 * TILE, floorTop - 12);
+        }
 
         // Keyboard: arrow keys for walking.
         // (Q, W, E and Enter are handled in the overlay.)
