@@ -4,6 +4,7 @@ import fishingWords from '../../data/fishing-words.json';
 import menuText from '../../data/menu.json';
 import items from '../../data/items.json';
 import { createSave, downloadSave, pickSaveFile } from '../save.js';
+import { nahuatl, english, getAuxLanguage, setAuxLanguage } from '../language.js';
 import { MAX_LIFE } from './TestRoom.js';
 
 const SLOT_KEYS = [ 'q', 'w', 'e' ];
@@ -87,7 +88,8 @@ const BEAN_GAP = 4;          // space between the number and the rectangle
 const COLOR_BEAN = 0x5c3317;
 
 // Width of the menu panel (it sits in the middle of the screen).
-const MENU_WIDTH = 200;
+// (Wider than before, so the longer Nahuatl words and the gloss buttons fit.)
+const MENU_WIDTH = 240;
 
 // Where the lines of the menu pages start on screen, and the space between lines.
 // 512 is the width of the game screen (see main.js).
@@ -97,6 +99,18 @@ const LINE_HEIGHT = 16;
 
 // Bag page: where the item numbers end, near the right edge of the menu panel.
 const LIST_RIGHT = (512 + MENU_WIDTH) / 2 - 16;
+
+// Gloss button: a small square at the right end of every menu line.
+// Clicking it switches the line between Nahuatl and English.
+// It's only shown when English is chosen as auxiliary language in Settings.
+const GLOSS_SIZE = 10;                                   // size of the square in pixels
+const GLOSS_SPACE = GLOSS_SIZE + 6;                      // room it takes at the end of a line
+const GLOSS_X = LIST_LEFT - 4 + MENU_WIDTH - 24 - GLOSS_SPACE / 2; // middle of the square
+
+// Settings page: a small white square shows which auxiliary language is chosen.
+// It sits just left of the gloss buttons.
+const SETTINGS_MARK_SIZE = 6;
+const SETTINGS_MARK_X = GLOSS_X - GLOSS_SPACE;
 
 // Placeholder fish next to "Michin" in the bag: same size as the fish in the water (10 x 5).
 const BAG_FISH_WIDTH = 10;
@@ -178,7 +192,7 @@ export class Overlay extends Scene
 
         // --- Life points (Yollotl) in the top left corner ---
         // First the word (from src/data/menu.json), in the corner.
-        const lifeLabel = this.add.text(LIFE_LEFT, LIFE_TOP, menuText.hud.life, TEXT_STYLE);
+        const lifeLabel = this.add.text(LIFE_LEFT, LIFE_TOP, nahuatl(menuText.hud.life), TEXT_STYLE);
 
         // Then one red square per life point, side by side, right after the word.
         // They start where the word ends (plus a small gap), and sit at the
@@ -236,6 +250,7 @@ export class Overlay extends Scene
         // 'map'   = list of all rooms
         // 'words' = the word list
         // 'save'  = download / upload a save file
+        // 'settings' = choose the auxiliary language (English or none)
         this.menu = this.add.container(0, 0).setVisible(false);
 
         const panel = this.add.rectangle(w / 2, h / 2, MENU_WIDTH, h - 60, 0x222222, 0.9)
@@ -246,7 +261,7 @@ export class Overlay extends Scene
         // Bottom left: (q) confirm  (w) back. Bottom right, next to the Enter symbol: close.
         const hintY = h - 14;
 
-        [ [ 'q', menuText.buttons.confirm ], [ 'w', menuText.buttons.back ] ].forEach(([ letter, label ], i) => {
+        [ [ 'q', nahuatl(menuText.buttons.confirm) ], [ 'w', nahuatl(menuText.buttons.back) ] ].forEach(([ letter, label ], i) => {
             const circleX = 18 + i * 80;
             const circle = this.add.circle(circleX, hintY, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
             const letterText = this.add.text(circleX, hintY, letter, TEXT_STYLE).setOrigin(0.5);
@@ -263,8 +278,14 @@ export class Overlay extends Scene
             bag: { container: this.add.container(0, 0), items: [], highlight: null, chosen: 0 },
             map: this.makeChoicePage('map', menuText.map),
             words: this.makeWordListPage(),
-            save: this.makeChoicePage('save', menuText.save)
+            save: this.makeChoicePage('save', menuText.save),
+            settings: this.makeChoicePage('settings', menuText.settings)
         };
+
+        // The small white square on the Settings page next to the chosen language.
+        this.settingsMark = this.add.rectangle(SETTINGS_MARK_X, 0, SETTINGS_MARK_SIZE, SETTINGS_MARK_SIZE, 0xffffff);
+        this.pages.settings.container.add(this.settingsMark);
+        this.updateSettingsMark();
 
         // Message under the save choices, e.g. when an uploaded file isn't a save file.
         // (Long messages wrap onto the next line so they stay inside the panel.)
@@ -303,7 +324,7 @@ export class Overlay extends Scene
 
         const qCircle = this.add.circle(18, h - 14, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
         const qLetter = this.add.text(18, h - 14, 'q', TEXT_STYLE).setOrigin(0.5);
-        const qLabel = this.add.text(34, h - 14, menuText.buttons.confirm, TEXT_STYLE).setOrigin(0, 0.5);
+        const qLabel = this.add.text(34, h - 14, nahuatl(menuText.buttons.confirm), TEXT_STYLE).setOrigin(0, 0.5);
 
         this.dialogue.add([ dialogueBox, this.dialogueText, qCircle, qLetter, qLabel ]);
 
@@ -323,7 +344,7 @@ export class Overlay extends Scene
 
         this.trade.add([ tradePanel, this.tradeHighlight, this.tradeLines, this.tradeMessage ]);
 
-        [ [ 'q', menuText.buttons.confirm ], [ 'w', menuText.buttons.back ] ].forEach(([ letter, label ], i) => {
+        [ [ 'q', nahuatl(menuText.buttons.confirm) ], [ 'w', nahuatl(menuText.buttons.back) ] ].forEach(([ letter, label ], i) => {
             const circleX = 18 + i * 80;
             const circle = this.add.circle(circleX, hintY, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
             const letterText = this.add.text(circleX, hintY, letter, TEXT_STYLE).setOrigin(0.5);
@@ -500,9 +521,10 @@ export class Overlay extends Scene
     // ---------- Menu ----------
 
     // A menu page with a list of choices, e.g. Profile / Bag / Word List / Save.
-    // name = the page's name ('main' or 'save').
+    // name = the page's name ('main', 'map', 'save' or 'settings').
     // items come from src/data/menu.json. The chosen line has a colored bar behind it.
     // Every line can also be clicked with the mouse.
+    // Each line has a gloss button at its right end (see clickGloss).
     makeChoicePage (name, items)
     {
         const container = this.add.container(0, 0);
@@ -511,24 +533,84 @@ export class Overlay extends Scene
             .setOrigin(0, 0);
         container.add(highlight);
 
-        items.forEach((item, i) => {
-            const line = this.add.text(LIST_LEFT, LIST_TOP + i * LINE_HEIGHT, item.label, TEXT_STYLE);
+        // One entry per line: its text, its gloss button, and whether it shows English right now.
+        const glosses = [];
 
-            // Clickable on the whole blue bar, not just on the word.
+        items.forEach((item, i) => {
+            const top = LIST_TOP + i * LINE_HEIGHT;
+            const line = this.add.text(LIST_LEFT, top, nahuatl(item.label), TEXT_STYLE);
+
+            // Clickable on the whole blue bar, not just on the word,
+            // except for the gloss button at the right end.
             // The area is measured from the word's top left corner, so it starts 4 pixels
             // to the left and 1 pixel above it, exactly like the bar.
             // The mouse pointer turns into a hand over it.
             line.setInteractive({
-                hitArea: new Geom.Rectangle(-4, -1, MENU_WIDTH - 24, LINE_HEIGHT - 1),
+                hitArea: new Geom.Rectangle(-4, -1, MENU_WIDTH - 24 - GLOSS_SPACE, LINE_HEIGHT - 1),
                 hitAreaCallback: Geom.Rectangle.Contains,
                 useHandCursor: true
             });
             line.on('pointerdown', () => this.clickChoice(name, i));
 
-            container.add(line);
+            // Gloss button: a small dark square with a white outline.
+            // It turns blue while the line shows English.
+            const button = this.add.rectangle(GLOSS_X, top + LINE_HEIGHT / 2 - 1, GLOSS_SIZE, GLOSS_SIZE, COLOR_EMPTY)
+                .setStrokeStyle(1, 0xffffff);
+            button.setInteractive({ useHandCursor: true });
+
+            const gloss = { line, label: item.label, button, english: false };
+            button.on('pointerdown', () => this.clickGloss(name, gloss));
+            glosses.push(gloss);
+
+            container.add([ line, button ]);
         });
 
-        return { container, items, highlight, chosen: 0 };
+        return { container, items, highlight, chosen: 0, glosses };
+    }
+
+    // A gloss button was clicked: switch its line between Nahuatl and English.
+    // It does nothing else (it doesn't choose the line).
+    // Glosses only work with the mouse / finger, never with a key.
+    clickGloss (pageName, gloss)
+    {
+        // Only on the page that is shown right now, and only with English chosen in Settings.
+        if (this.mode !== 'menu' || this.page !== pageName || getAuxLanguage(this) !== 'en')
+        {
+            return;
+        }
+
+        gloss.english = !gloss.english;
+        this.showGloss(gloss);
+    }
+
+    // Writes a line in Nahuatl or English, and colors its gloss button to match.
+    showGloss (gloss)
+    {
+        gloss.line.setText(gloss.english ? english(gloss.label) : nahuatl(gloss.label));
+        gloss.button.setFillStyle(gloss.english ? COLOR_USED : COLOR_EMPTY);
+    }
+
+    // Puts every menu line back to Nahuatl, and shows the gloss buttons
+    // only if English is chosen as auxiliary language.
+    // Called whenever the menu opens and when the auxiliary language changes.
+    resetGlosses ()
+    {
+        const showButtons = getAuxLanguage(this) === 'en';
+
+        Object.values(this.pages).forEach((page) => {
+            (page.glosses ?? []).forEach((gloss) => {
+                gloss.english = false;
+                this.showGloss(gloss);
+                gloss.button.setVisible(showButtons);
+            });
+        });
+    }
+
+    // Moves the white square on the Settings page next to the chosen language.
+    updateSettingsMark ()
+    {
+        const index = menuText.settings.findIndex((s) => s.language === getAuxLanguage(this));
+        this.settingsMark.setY(LIST_TOP + index * LINE_HEIGHT + LINE_HEIGHT / 2 - 1);
     }
 
     // The word list page: one line of text per entry in src/data/wordlist.json.
@@ -574,7 +656,7 @@ export class Overlay extends Scene
         // Nothing in the bag: "Your bag is empty."
         if (owned.length === 0)
         {
-            container.add(this.add.text(LIST_LEFT, LIST_TOP, menuText.messages.bagEmpty,
+            container.add(this.add.text(LIST_LEFT, LIST_TOP, nahuatl(menuText.messages.bagEmpty),
                 { ...TEXT_STYLE, wordWrap: { width: MENU_WIDTH - 32 } }));
         }
     }
@@ -585,7 +667,9 @@ export class Overlay extends Scene
         this.menu.setVisible(true);
         this.qweButtons.setVisible(false);
 
-        // The menu always opens on the main page, with the first choice marked.
+        // The menu always opens on the main page, with the first choice marked,
+        // and with every line in Nahuatl.
+        this.resetGlosses();
         this.pages.main.chosen = 0;
         this.showPage('main');
 
@@ -678,13 +762,23 @@ export class Overlay extends Scene
     }
 
     // q was pressed (or a line clicked) on a menu line.
-    // item = that line from src/data/menu.json, e.g. { id: 'save', label: 'Save' }.
+    // item = that line from src/data/menu.json, e.g. { id: 'save', label: { nah: ..., en: ... } }.
     confirmChoice (item)
     {
         // On the map page, every line is a room: go there.
         if (this.page === 'map')
         {
             this.teleport(item.room);
+            return;
+        }
+
+        // On the Settings page, every line is an auxiliary language: choose it.
+        // All lines go back to Nahuatl, and the gloss buttons appear or disappear.
+        if (this.page === 'settings')
+        {
+            setAuxLanguage(this, item.language);
+            this.resetGlosses();
+            this.updateSettingsMark();
             return;
         }
 
@@ -709,6 +803,12 @@ export class Overlay extends Scene
             this.pages.save.chosen = 0;
             this.showPage('save');
         }
+        else if (id === 'settings')
+        {
+            // Opens with the language that is chosen right now marked.
+            this.pages.settings.chosen = menuText.settings.findIndex((s) => s.language === getAuxLanguage(this));
+            this.showPage('settings');
+        }
         else if (id === 'download')
         {
             // The save file remembers which room the player is in, how many life points are left,
@@ -725,10 +825,10 @@ export class Overlay extends Scene
         {
             pickSaveFile(
                 (save) => this.loadSave(save),
-                () => this.saveMessage.setText(menuText.messages.badFile)
+                () => this.saveMessage.setText(nahuatl(menuText.messages.badFile))
             );
         }
-        // 'profile' and 'settings' do nothing yet.
+        // 'profile' does nothing yet.
     }
 
     // For testing: closes the menu and puts the player into a room right away.
@@ -840,7 +940,7 @@ export class Overlay extends Scene
             slot.letterLabel.setVisible(keep);
             slot.wordLabel.setVisible(keep);
         });
-        this.slots[this.fishingSlot].wordLabel.setText(menuText.buttons.cancel);
+        this.slots[this.fishingSlot].wordLabel.setText(nahuatl(menuText.buttons.cancel));
     }
 
     // Puts all three circles back to normal after fishing: visible, each with its own word.
@@ -1109,10 +1209,10 @@ export class Overlay extends Scene
     updateEnterLabel ()
     {
         const words = {
-            play: menuText.buttons.menu,
-            prompt: menuText.buttons.confirm,
-            menu: menuText.buttons.close,
-            trade: menuText.buttons.close
+            play: nahuatl(menuText.buttons.menu),
+            prompt: nahuatl(menuText.buttons.confirm),
+            menu: nahuatl(menuText.buttons.close),
+            trade: nahuatl(menuText.buttons.close)
         };
         let word = words[this.mode] ?? '';
 
@@ -1263,7 +1363,7 @@ export class Overlay extends Scene
         // Selling with nothing to sell: "Your bag is empty."
         if (this.tradeKind === 'sell' && entries.length === 0)
         {
-            this.tradeMessage.setText(menuText.messages.bagEmpty);
+            this.tradeMessage.setText(nahuatl(menuText.messages.bagEmpty));
         }
 
         // If the chosen line is gone (sold out), choose the last line instead.
@@ -1355,7 +1455,7 @@ export class Overlay extends Scene
 
         if (this.tradeMax < 1)
         {
-            this.tradeMessage.setText(menuText.messages.notEnoughCacao);
+            this.tradeMessage.setText(nahuatl(menuText.messages.notEnoughCacao));
             return;
         }
 
@@ -1371,7 +1471,7 @@ export class Overlay extends Scene
         const item = this.tradeEntries()[this.tradeChosen];
         const price = this.tradeKind === 'buy' ? item.buyPrice : item.sellPrice;
 
-        this.tradeAmountLabel.setText(this.tradeKind === 'buy' ? menuText.shop.buy : menuText.shop.sell);
+        this.tradeAmountLabel.setText(this.tradeKind === 'buy' ? nahuatl(menuText.shop.buy) : nahuatl(menuText.shop.sell));
         this.tradeAmountText.setText(String(this.tradeCount));
         this.tradeTotalText.setText(String(price * this.tradeCount));
     }
@@ -1396,12 +1496,12 @@ export class Overlay extends Scene
         if (this.tradeKind === 'buy')
         {
             done = room.buyItem(item.id, item.buyPrice, count);
-            template = menuText.messages.bought;
+            template = nahuatl(menuText.messages.bought);
         }
         else
         {
             done = room.sellItem(item.id, item.sellPrice, count);
-            template = menuText.messages.sold;
+            template = nahuatl(menuText.messages.sold);
         }
 
         this.stopPickingAmount();
@@ -1411,12 +1511,12 @@ export class Overlay extends Scene
         // with the number and the item's name.
         let message = done
             ? template.replace('{count}', count).replace('{item}', item.name)
-            : menuText.messages.notEnoughCacao;
+            : nahuatl(menuText.messages.notEnoughCacao);
 
         // Just sold the last thing: also say that the bag is empty now.
         if (this.tradeKind === 'sell' && this.tradeEntries().length === 0)
         {
-            message += '\n' + menuText.messages.bagEmpty;
+            message += '\n' + nahuatl(menuText.messages.bagEmpty);
         }
 
         this.tradeMessage.setText(message);
