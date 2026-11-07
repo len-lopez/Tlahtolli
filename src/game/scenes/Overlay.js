@@ -331,9 +331,23 @@ export class Overlay extends Scene
             this.trade.add([ circle, letterText, labelText ]);
         });
 
+        // Amount line: shown under the list after choosing an item, to pick how many.
+        // A box with "x 3" on the left and the total price (with a bean) on the right.
+        this.tradeAmount = this.add.container(0, 0).setVisible(false);
+        this.tradeAmountBox = this.add.rectangle(LIST_LEFT - 4, 0, MENU_WIDTH - 24, LINE_HEIGHT + 3)
+            .setOrigin(0, 0).setStrokeStyle(1, COLOR_EDITING);
+        this.tradeAmountText = this.add.text(LIST_LEFT, 0, '', TEXT_STYLE);
+        this.tradeTotalText = this.add.text(SHOP_PRICE_RIGHT, 0, '', TEXT_STYLE).setOrigin(1, 0);
+        this.tradeTotalBean = this.add.rectangle(LIST_RIGHT - SHOP_BEAN_WIDTH, 0, SHOP_BEAN_WIDTH, SHOP_BEAN_HEIGHT, COLOR_BEAN)
+            .setOrigin(0, 0.5);
+        this.tradeAmount.add([ this.tradeAmountBox, this.tradeAmountText, this.tradeTotalText, this.tradeTotalBean ]);
+        this.trade.add(this.tradeAmount);
+
         this.tradeKind = null;   // 'buy' or 'sell' while the window is open
         this.tradeGoods = [];    // ids of what the merchant sells
         this.tradeChosen = 0;    // which line is chosen
+        this.tradeCount = null;  // how many, while picking an amount; null while choosing an item
+        this.tradeMax = 0;       // the most you can pick right now
 
         // Every key press goes through here.
         this.input.keyboard.on('keydown', (event) => this.handleKey(event));
@@ -1148,6 +1162,7 @@ export class Overlay extends Scene
         this.tradeGoods = goods;
         this.tradeChosen = 0;
         this.tradeMessage.setText('');
+        this.stopPickingAmount(); // always start by choosing an item
         this.fillTradeLines();
 
         this.trade.setVisible(true);
@@ -1199,8 +1214,9 @@ export class Overlay extends Scene
             const clickArea = this.add.rectangle(LIST_LEFT - 4, top - 1, MENU_WIDTH - 24, LINE_HEIGHT - 1)
                 .setOrigin(0, 0)
                 .setInteractive({ useHandCursor: true });
+            // (Only while choosing an item, not while picking an amount.)
             clickArea.on('pointerdown', () => {
-                if (this.mode === 'trade')
+                if (this.mode === 'trade' && this.tradeCount === null)
                 {
                     this.tradeChosen = i;
                     this.updateTradeHighlight();
@@ -1226,8 +1242,14 @@ export class Overlay extends Scene
             }
         });
 
-        // The message goes under the last line (or at the top if the list is empty).
-        this.tradeMessage.setY(LIST_TOP + entries.length * LINE_HEIGHT + 8);
+        // The message and the amount line go under the last line
+        // (or at the top if the list is empty).
+        const belowList = LIST_TOP + entries.length * LINE_HEIGHT + 8;
+        this.tradeMessage.setY(belowList);
+        this.tradeAmountBox.setY(belowList - 2);
+        this.tradeAmountText.setY(belowList);
+        this.tradeTotalText.setY(belowList);
+        this.tradeTotalBean.setY(belowList + LINE_HEIGHT / 2 - 1);
 
         // If the chosen line is gone (sold out), choose the last line instead.
         this.tradeChosen = Math.min(this.tradeChosen, Math.max(entries.length - 1, 0));
@@ -1241,14 +1263,44 @@ export class Overlay extends Scene
         this.tradeHighlight.y = LIST_TOP - 1 + this.tradeChosen * LINE_HEIGHT;
     }
 
-    // A key press while the shop window is open:
-    // up/down = choose, q = buy/sell one, w or Enter = close.
+    // A key press while the shop window is open. Two steps:
+    // 1. Choosing an item:  up/down = choose, q = pick an amount, w or Enter = close the window.
+    // 2. Picking an amount: up/down = 1 more/less, right/left = 10 more/less,
+    //                       q = buy/sell, w = back to choosing, Enter = close the window.
     handleTradeKey (event)
     {
         const key = event.key.toLowerCase();
+
+        if (key === 'enter')
+        {
+            this.closeTrade();
+            return;
+        }
+
+        if (this.tradeCount !== null)
+        {
+            const steps = { arrowup: 1, arrowdown: -1, arrowright: 10, arrowleft: -10 };
+
+            if (key in steps)
+            {
+                // Never below 1, never more than you can buy/sell.
+                this.tradeCount = Math.min(Math.max(this.tradeCount + steps[key], 1), this.tradeMax);
+                this.showTradeAmount();
+            }
+            else if (key === 'q')
+            {
+                this.finishTrade();
+            }
+            else if (key === 'w')
+            {
+                this.stopPickingAmount();
+            }
+            return;
+        }
+
         const entries = this.tradeEntries();
 
-        if (key === 'w' || key === 'enter')
+        if (key === 'w')
         {
             this.closeTrade();
         }
@@ -1264,7 +1316,10 @@ export class Overlay extends Scene
         }
     }
 
-    // Buys or sells one of the chosen item.
+    // q (or a click) on an item: start picking how many.
+    // The most you can pick: when buying, as many as your beans pay for;
+    // when selling, as many as you have.
+    // If you can't even buy one, the "not enough cacao" message appears instead.
     confirmTrade ()
     {
         const entries = this.tradeEntries();
@@ -1276,18 +1331,68 @@ export class Overlay extends Scene
         const item = entries[this.tradeChosen];
         const room = this.scene.get('TestRoom');
 
+        this.tradeMax = this.tradeKind === 'buy'
+            ? Math.floor(room.beans / item.buyPrice)
+            : room.bag[item.id];
+
+        if (this.tradeMax < 1)
+        {
+            this.tradeMessage.setText(menuText.messages.notEnoughCacao);
+            return;
+        }
+
+        this.tradeCount = 1;
+        this.tradeMessage.setText('');
+        this.tradeAmount.setVisible(true);
+        this.showTradeAmount();
+    }
+
+    // Writes the amount and the total price into the amount line.
+    showTradeAmount ()
+    {
+        const item = this.tradeEntries()[this.tradeChosen];
+        const price = this.tradeKind === 'buy' ? item.buyPrice : item.sellPrice;
+
+        this.tradeAmountText.setText('x ' + this.tradeCount);
+        this.tradeTotalText.setText(String(price * this.tradeCount));
+    }
+
+    // Leaves the amount step and goes back to choosing an item.
+    stopPickingAmount ()
+    {
+        this.tradeCount = null;
+        this.tradeAmount.setVisible(false);
+    }
+
+    // q while picking an amount: buy or sell that many,
+    // then show "Bought/Sold (number) (item)." under the list.
+    finishTrade ()
+    {
+        const item = this.tradeEntries()[this.tradeChosen];
+        const room = this.scene.get('TestRoom');
+        const count = this.tradeCount;
+
+        let done;
+        let template;
         if (this.tradeKind === 'buy')
         {
-            const bought = room.buyItem(item.id, item.buyPrice);
-            this.tradeMessage.setText(bought ? '' : menuText.messages.notEnoughCacao);
+            done = room.buyItem(item.id, item.buyPrice, count);
+            template = menuText.messages.bought;
         }
         else
         {
-            room.sellItem(item.id, item.sellPrice);
-            this.tradeMessage.setText('');
+            done = room.sellItem(item.id, item.sellPrice, count);
+            template = menuText.messages.sold;
         }
 
+        this.stopPickingAmount();
         this.fillTradeLines();
+
+        // {count} and {item} in the message (src/data/menu.json) are replaced
+        // with the number and the item's name.
+        this.tradeMessage.setText(done
+            ? template.replace('{count}', count).replace('{item}', item.name)
+            : menuText.messages.notEnoughCacao);
     }
 
     // ---------- Dialogue (Ihtoa) ----------
