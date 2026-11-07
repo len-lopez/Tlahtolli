@@ -294,7 +294,11 @@ export class Overlay extends Scene
 
         if (event.key === 'Enter')
         {
-            this.openMenu();
+            // While sleeping (Cochi), the menu can't be opened.
+            if (!this.isSleeping())
+            {
+                this.openMenu();
+            }
             return;
         }
 
@@ -903,10 +907,16 @@ export class Overlay extends Scene
             prompt: menuText.buttons.confirm,
             menu: menuText.buttons.close
         };
-        const word = words[this.mode] ?? '';
+        let word = words[this.mode] ?? '';
 
+        // While sleeping, Enter does nothing either, so it's hidden too.
         const fishing = [ 'fishing', 'minigame', 'reveal' ].includes(this.mode);
-        this.enterButton.setVisible(!fishing);
+        const hidden = fishing || this.isSleeping();
+        this.enterButton.setVisible(!hidden);
+        if (hidden)
+        {
+            word = '';
+        }
 
         if (this.enterLabel.text !== word)
         {
@@ -935,6 +945,12 @@ export class Overlay extends Scene
             // Time's up: the fish gets away.
             this.finishMinigame(false);
         }
+    }
+
+    // True while the player is asleep (Cochi). The room knows this.
+    isSleeping ()
+    {
+        return this.scene.get('TestRoom').sleep !== null;
     }
 
     // ---------- Life points ----------
