@@ -106,6 +106,7 @@ const COLOR_NPC = 0x9b5de5;
 //         (the water starts at column 16).
 // type  = which plant it is; its Itta text is in src/data/plants.json under that name.
 // trunk = width and height of the brown trunk, in pixels, or null for a bush (no trunk).
+//         Keep trunks at most 18 pixels high, so the crown reaches down to the player's eyes.
 // crown = width and height of the green leafy part, in pixels. It sits on top of the trunk
 //         (or right on the ground, for a bush).
 // flowers = where each flower sits on the crown: x = left/right of the crown's middle,
@@ -114,10 +115,11 @@ const LAKE_PLANTS = [
     {
         // A flowering tree with a round-ish crown
         col: 2, type: 'redFlower', color: 0xd62828,
-        trunk: { width: 6, height: 28 },
-        crown: { width: 42, height: 32 },
-        flowers: [ { x: -14, y: -9 }, { x: 2, y: -11 }, { x: 13, y: -4 }, { x: -6, y: 1 },
-                   { x: 8, y: 8 }, { x: -15, y: 8 }, { x: 16, y: 10 } ]
+        trunk: { width: 6, height: 16 },
+        crown: { width: 42, height: 44 },
+        flowers: [ { x: -14, y: -15 }, { x: 2, y: -17 }, { x: 13, y: -9 }, { x: -6, y: -4 },
+                   { x: 10, y: 3 }, { x: -15, y: 6 }, { x: 3, y: 10 }, { x: 16, y: 15 },
+                   { x: -5, y: 16 } ]
     },
     {
         // A wide, low bush standing right on the ground
@@ -130,10 +132,10 @@ const LAKE_PLANTS = [
     {
         // A tall, narrow tree
         col: 12, type: 'yellowFlower', color: 0xf2c418,
-        trunk: { width: 4, height: 40 },
-        crown: { width: 26, height: 44 },
-        flowers: [ { x: -6, y: -17 }, { x: 6, y: -10 }, { x: -7, y: -2 }, { x: 5, y: 6 },
-                   { x: -4, y: 14 } ]
+        trunk: { width: 4, height: 16 },
+        crown: { width: 26, height: 68 },
+        flowers: [ { x: -6, y: -27 }, { x: 6, y: -19 }, { x: -7, y: -9 }, { x: 5, y: 0 },
+                   { x: -5, y: 10 }, { x: 6, y: 19 }, { x: -3, y: 28 } ]
     }
 ];
 const COLOR_LEAVES = 0x2d6a4f;

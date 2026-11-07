@@ -1336,7 +1336,8 @@ export class Overlay extends Scene
         {
             // The fish's color word and two other color words picked at random, all mixed up.
             const others = shuffle(fishingWords.filter((e) => e !== entry)).slice(0, 2);
-            labels = shuffle([ entry, ...others ]).map((e) => e.word.toLowerCase());
+            // Written as in the word list, with a capital letter (e.g. "Chichiltic").
+            labels = shuffle([ entry, ...others ]).map((e) => e.word);
         }
 
         // Everything on screen for the minigame goes into one container,
@@ -1423,7 +1424,7 @@ export class Overlay extends Scene
             // Color choice: one press decides it.
             // Right word: the box turns green and the fish is caught.
             // Wrong word: the box turns red and the fish gets away.
-            if (pressed.part === game.entry.word.toLowerCase())
+            if (pressed.part === game.entry.word)
             {
                 pressed.box.setFillStyle(COLOR_CORRECT);
                 this.finishMinigame(true);
