@@ -39,8 +39,10 @@
         "nothingToInspect": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "nican.", "en": "here." } ] },
         "notInterested": { "nah": "Amo nicnequi.", "en": "Not interested." },
         "notEnoughCacao": { "nah": "Amo ixachi in mocacahuauh.", "en": "Not enough cacao." },
-        "bought": { "nah": null, "en": "(Placeholder) Bought {count} {item}." },
-        "sold": { "nah": null, "en": "(Placeholder) Sold {count} {item}." },
+        "boughtOne": { "words": [ { "nah": "Oticcouh", "en": "You bought it" }, { "nah": "ce", "en": "one" }, { "slot": "item", "end": "." } ] },
+        "boughtMany": { "words": [ { "nah": "Otiquincouh", "en": "You bought them" }, { "slot": "count" }, { "slot": "item", "end": "." } ] },
+        "soldOne": { "words": [ { "nah": "Oticnamac", "en": "You sold it" }, { "nah": "ce", "en": "one" }, { "slot": "item", "end": "." } ] },
+        "soldMany": { "words": [ { "nah": "Otiquinnamac", "en": "You sold them" }, { "slot": "count" }, { "slot": "item", "end": "." } ] },
         "whatToBuy": { "words": [ { "nah": "Tlein", "en": "What" }, { "nah": "ticcohuaznequi?", "en": "do you want to buy?" } ] },
         "whatToSell": { "words": [ { "nah": "Tle", "en": "What" }, { "nah": "ticnamacaznequi?", "en": "do you want to sell?" } ] },
         "bagEmpty": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "ipan", "en": "inside" }, { "nah": "moxiquipil.", "en": "your bag." } ] }

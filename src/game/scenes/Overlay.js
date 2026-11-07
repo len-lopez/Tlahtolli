@@ -1812,7 +1812,7 @@ export class Overlay extends Scene
     }
 
     // q while picking an amount: buy or sell that many,
-    // then show "Bought/Sold (number) (item)." under the list.
+    // then show e.g. "Oticcouh ce michin." or "Otiquinnamac 10 mimichtin." under the list.
     finishTrade ()
     {
         const item = this.tradeEntries()[this.tradeChosen];
@@ -1824,23 +1824,18 @@ export class Overlay extends Scene
         if (this.tradeKind === 'buy')
         {
             done = room.buyItem(item.id, item.buyPrice, count);
-            template = nahuatl(menuText.messages.bought);
+            template = count === 1 ? menuText.messages.boughtOne : menuText.messages.boughtMany;
         }
         else
         {
             done = room.sellItem(item.id, item.sellPrice, count);
-            template = nahuatl(menuText.messages.sold);
+            template = count === 1 ? menuText.messages.soldOne : menuText.messages.soldMany;
         }
 
         this.stopPickingAmount();
         this.fillTradeLines();
 
-        // {count} and {item} in the message (src/data/menu.json) are replaced
-        // with the number and the item's name.
-        // (This message has no gloss yet: it's only a placeholder.)
-        const message = [ done
-            ? { nah: template.replace('{count}', count).replace('{item}', nahuatl(item.name)), en: null }
-            : menuText.messages.notEnoughCacao ];
+        const message = [ done ? this.fillTemplate(template, count, item) : menuText.messages.notEnoughCacao ];
 
         // Just sold the last thing: also say that the bag is empty now (on a new line).
         if (this.tradeKind === 'sell' && this.tradeEntries().length === 0)
@@ -1849,6 +1844,32 @@ export class Overlay extends Scene
         }
 
         this.setSentence(this.tradeMessage, message);
+    }
+
+    // Fills in the gaps of a buy/sell message from src/data/menu.json:
+    //   { "slot": "count" } = the number, in digits (it has no gloss)
+    //   { "slot": "item" }  = the item's name from src/data/items.json: "name" for one,
+    //                         "plural" for more than one; "end" is added after it (e.g. ".").
+    //                         In the middle of the sentence its first letter is small (Michin -> michin).
+    // The other words stay as they are.
+    fillTemplate (template, count, item)
+    {
+        const words = template.words.map((word) => {
+            if (word.slot === 'count')
+            {
+                return { nah: String(count), en: null };
+            }
+            if (word.slot === 'item')
+            {
+                const name = count === 1 ? item.name : (item.plural ?? item.name);
+                const end = word.end ?? '';
+                const small = (text) => text.charAt(0).toLowerCase() + text.slice(1);
+                return { nah: small(nahuatl(name)) + end, en: small(english(name)) + end };
+            }
+            return word;
+        });
+
+        return { words };
     }
 
     // ---------- Dialogue (Ihtoa) ----------
