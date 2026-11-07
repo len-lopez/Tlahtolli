@@ -276,15 +276,29 @@ export class TestRoom extends Scene
             : MAX_LIFE;
 
         // --- Cacao beans (the money) ---
-        // Everyone starts with 0. There's no way to get beans yet.
-        // (Not in the save file yet either, so loading a save also gives 0.)
-        this.beans = 0;
+        // A new game starts with 0. There's no way to get beans yet.
+        // After loading a save file, the saved beans are used.
+        // A save file without beans (older version), or with a strange number, gives 0.
+        const savedBeans = data && data.save ? data.save.beans : 0;
+        this.beans = Number.isInteger(savedBeans) && savedBeans >= 0 ? savedBeans : 0;
 
         // --- Bag ---
         // How many of each item the player has, e.g. { michin: 3 }.
         // The names (like "michin") are the ids in src/data/items.json.
-        // Starts empty. (Not in the save file yet, so loading a save also empties it.)
+        // A new game starts with an empty bag. After loading a save file, the saved bag is used.
+        // A save file without a bag (older version) gives an empty bag.
+        // Any entry with a strange number (not a whole number, or below 0) is left out.
         this.bag = {};
+        const savedBag = data && data.save ? data.save.bag : null;
+        if (savedBag !== null && typeof savedBag === 'object')
+        {
+            Object.entries(savedBag).forEach(([ id, amount ]) => {
+                if (Number.isInteger(amount) && amount >= 0)
+                {
+                    this.bag[id] = amount;
+                }
+            });
+        }
 
         // Keyboard: arrow keys for walking.
         // (Q, W, E and Enter are handled in the overlay.)
