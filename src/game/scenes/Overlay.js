@@ -60,6 +60,7 @@ function shuffle (list)
 
 const COLOR_EMPTY = 0x333333;
 const COLOR_USED = 0x2e7d9a;
+const COLOR_EDITING = 0xf2c418; // outline of the q/w/e circle you're typing a word for
 
 const TEXT_STYLE = {
     fontFamily: 'Arial',
@@ -482,8 +483,8 @@ export class Overlay extends Scene
         this.updatePromptText();
         this.prompt.setVisible(true);
 
-        // The q/w/e circles are hidden while typing.
-        this.qweButtons.setVisible(false);
+        // The circle being edited gets a thick yellow outline.
+        this.slots[letter].circle.setStrokeStyle(2, COLOR_EDITING);
 
         // The room stops but stays visible behind the prompt.
         this.scene.pause('TestRoom');
@@ -524,8 +525,10 @@ export class Overlay extends Scene
         }
 
         this.prompt.setVisible(false);
-        this.qweButtons.setVisible(true);
         this.mode = 'play';
+
+        // The edited circle gets its normal thin white outline back.
+        this.slots[this.promptSlot].circle.setStrokeStyle(1, 0xffffff);
         this.promptSlot = null;
         this.scene.resume('TestRoom');
     }
