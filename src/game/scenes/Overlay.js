@@ -73,6 +73,12 @@ const BOX_WIDTH = 64;
 const BOX_HEIGHT = 32;
 const BOX_GAP = 10;
 
+// Which group of five a number is in: 1-5 = 1, 6-10 = 2, 11-15 = 3, 16-20 = 4.
+function numberGroup (n)
+{
+    return Math.ceil(n / 5);
+}
+
 // The beginning of a text, up to and including its n-th letter (spaces don't count).
 // Example: firstLetters("Mahtlactli once", 12) -> "Mahtlactli on"
 function firstLetters (text, n)
@@ -1396,7 +1402,16 @@ export class Overlay extends Scene
         // lockWalking: the player can't walk away while answering (or right after a wrong answer).
         // hideWrong: after a wrong answer the right word is NOT shown (it would give away
         // the number before counting again).
-        this.startWordGame(entry, numberWords, { onResult, afterReveal, lockWalking: true, hideWrong: true });
+        // choicePool: in the pick-one-of-three version, the two wrong answers come from the
+        // same group of five as the right one (1-5, 6-10, 11-15, 16-20), so the answer isn't
+        // too easy to guess. E.g. for 13, the others are two of 11, 12, 14, 15.
+        this.startWordGame(entry, numberWords, {
+            onResult,
+            afterReveal,
+            lockWalking: true,
+            hideWrong: true,
+            choicePool: (right, all) => all.filter((e) => numberGroup(e.number) === numberGroup(right.number))
+        });
         return true;
     }
 
@@ -1437,7 +1452,9 @@ export class Overlay extends Scene
         else if (kind === 'choice')
         {
             // The fish's color word and two other color words picked at random, all mixed up.
-            const others = shuffle(words.filter((e) => e !== entry)).slice(0, 2);
+            // (If a "choicePool" is given, the two others come only from the words it picks.)
+            const pool = options.choicePool ? options.choicePool(entry, words) : words;
+            const others = shuffle(pool.filter((e) => e !== entry)).slice(0, 2);
             // Written as in the word list, with a capital letter (e.g. "Chichiltic").
             labels = shuffle([ entry, ...others ]).map((e) => e.word);
         }
