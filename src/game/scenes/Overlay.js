@@ -449,7 +449,16 @@ export class Overlay extends Scene
         this.dialogueNoLabel = wLabel;
 
         qCircle.setInteractive({ useHandCursor: true });
-        qCircle.on('pointerdown', () => this.answerQuestion(true));
+        qCircle.on('pointerdown', () => {
+            if (this.optionList)
+            {
+                this.chooseOption(this.optionList.chosen);
+            }
+            else
+            {
+                this.answerQuestion(true);
+            }
+        });
         wCircle.setInteractive({ useHandCursor: true });
         wCircle.on('pointerdown', () => {
             if (this.dialogueQuestion)
@@ -470,6 +479,10 @@ export class Overlay extends Scene
         this.dialogueQuestion = null;
         // True while the box shows a line of a long dialogue that w can leave early.
         this.dialogueCanQuit = false;
+
+        // The dialogue options while the player is choosing what to say (see openOptions),
+        // or null.
+        this.optionList = null;
 
         // --- Shop window: buying (Cohua) or selling (Namaca), hidden at the start ---
         // Looks like the menu: the same panel, a list with a blue bar on the chosen line,
@@ -597,6 +610,28 @@ export class Overlay extends Scene
             // An NPC is talking: q or w closes the dialogue box. Everything else does nothing.
             // If the NPC asked a yes/no question: q = yes, w = no.
             const key = event.key.toLowerCase();
+
+            // Choosing what to say: up/down = choose, q = say it, w = leave.
+            if (this.optionList)
+            {
+                const list = this.optionList;
+                if (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+                {
+                    const step = event.key === 'ArrowUp' ? -1 : 1;
+                    const count = list.options.length;
+                    this.markOption((list.chosen + step + count) % count);
+                }
+                else if (key === 'q')
+                {
+                    this.chooseOption(list.chosen);
+                }
+                else if (key === 'w')
+                {
+                    this.quitDialogue();
+                }
+                return;
+            }
+
             if (this.dialogueQuestion && (key === 'q' || key === 'w'))
             {
                 this.answerQuestion(key === 'q');
@@ -2244,6 +2279,7 @@ export class Overlay extends Scene
     // leaves the whole dialogue early, and afterClose does NOT happen. q goes on as usual.
     openDialogue (text, afterClose = null, canQuit = false)
     {
+        this.removeOptions();
         this.mode = 'dialogue';
         this.resetGlossTexts('dialogue');
         this.setSentence(this.dialogueText, text);
@@ -2270,6 +2306,91 @@ export class Overlay extends Scene
         this.dialogueAdvance.forEach((thing) => thing.setVisible(false));
         this.dialogueNo.forEach((thing) => thing.setVisible(true));
         this.setGlossLabel(this.dialogueNoLabel, menuText.buttons.no);
+    }
+
+    // The player chooses what to say: the dialogue box shows a list of options
+    // (at most 2 fit), one per line, the chosen one with a colored bar behind it.
+    // up/down = choose, q (or clicking a line, or the q circle) = say it, w = leave.
+    // Each line has a gloss button at its right end, like in the menu.
+    // options = [ { label: { nah, en }, action } ]; action = what happens when it's chosen.
+    openOptions (options)
+    {
+        this.openDialogue(null, null, true);
+        this.dialogueAdvance.forEach((thing) => thing.setVisible(false));
+
+        const w = this.scale.width;
+        const h = this.scale.height;
+        const left = 48;
+        const top = h - 52 - 22 + 4;          // the dialogue box's top is at h - 74
+        const barWidth = w - 80 - 8;          // the box is w - 80 wide
+
+        const container = this.add.container(0, 0);
+        const highlight = this.add.rectangle(left - 4, top - 1, barWidth, LINE_HEIGHT - 1, COLOR_USED)
+            .setOrigin(0, 0);
+        container.add(highlight);
+
+        options.forEach((option, i) => {
+            const lineTop = top + i * LINE_HEIGHT;
+            const line = this.add.text(left, lineTop, nahuatl(option.label), TEXT_STYLE);
+            line.setInteractive({
+                hitArea: new Geom.Rectangle(-4, -1, barWidth - GLOSS_SPACE, LINE_HEIGHT - 1),
+                hitAreaCallback: Geom.Rectangle.Contains,
+                useHandCursor: true
+            });
+            line.on('pointerdown', () => this.chooseOption(i));
+            container.add(line);
+
+            // Gloss button at the right end of the line.
+            if (hasGloss(option.label))
+            {
+                const glossX = left - 4 + barWidth - GLOSS_SPACE / 2;
+                const y = lineTop + LINE_HEIGHT / 2 - 1;
+                const box = this.add.rectangle(glossX, y, GLOSS_SIZE, GLOSS_SIZE, COLOR_EMPTY)
+                    .setStrokeStyle(1, 0xffffff);
+                const sign = this.add.text(glossX, y, '?', { ...TEXT_STYLE, fontSize: 9 }).setOrigin(0.5);
+                const gloss = { line, label: option.label, english: false, box };
+                box.setInteractive({ useHandCursor: true });
+                box.on('pointerdown', () => this.clickGloss(gloss, () => this.optionList !== null));
+                const button = this.add.container(0, 0, [ box, sign ]);
+                button.setVisible(getAuxLanguage(this) === 'en');
+                container.add(button);
+            }
+        });
+
+        this.dialogue.add(container);
+        this.optionList = { container, highlight, options, chosen: 0, top };
+    }
+
+    // Moves the colored bar to option number i.
+    markOption (i)
+    {
+        const list = this.optionList;
+        list.chosen = i;
+        list.highlight.y = list.top - 1 + i * LINE_HEIGHT;
+    }
+
+    // Says option number i: the box closes, then the option's action happens.
+    chooseOption (i)
+    {
+        if (this.mode !== 'dialogue' || !this.optionList)
+        {
+            return;
+        }
+
+        const action = this.optionList.options[i].action;
+        this.removeOptions();
+        this.dialogueAfterClose = action;
+        this.closeDialogue();
+    }
+
+    // Takes the option list away (if there is one).
+    removeOptions ()
+    {
+        if (this.optionList)
+        {
+            this.optionList.container.destroy();
+            this.optionList = null;
+        }
     }
 
     // Leaves a long dialogue early (w): closes the box without going on to the next line.
@@ -2307,6 +2428,7 @@ export class Overlay extends Scene
             return;
         }
 
+        this.removeOptions();
         this.mode = 'play';
         this.dialogue.setVisible(false);
         this.qweButtons.setVisible(true);
