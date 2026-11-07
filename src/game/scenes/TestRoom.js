@@ -1,6 +1,7 @@
 import { Scene } from 'phaser';
 import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
+import plantText from '../../data/plants.json';
 
 // Size of one tile in pixels. Tiled maps will use the same size later.
 const TILE = 16;
@@ -99,6 +100,35 @@ const MARKET_NPCS = [
     { col: 58, type: 'merchant' }
 ];
 const COLOR_NPC = 0x9b5de5;
+
+// --- Lake of Colors: flower plants (to look at and inspect with Itta; you walk through them) ---
+// col  = the tile column, counted from the Lake's left edge (the water starts at column 16).
+// type = which plant it is; its Itta text is in src/data/plants.json under that name.
+// stem = how tall the green stem is, in pixels.
+// leaves = where the leaves sit: how far up the stem (pixels) and to which side (-1 left, 1 right).
+// flowers = where each flower sits: x = left/right of the stem, y = up from the top of the stem.
+const LAKE_PLANTS = [
+    {
+        col: 7, type: 'redFlower', color: 0xd62828, stem: 18,
+        leaves: [ { up: 6, side: -1 }, { up: 10, side: 1 } ],
+        flowers: [ { x: 0, y: 0 }, { x: -5, y: -6 }, { x: 5, y: -4 } ]
+    },
+    {
+        col: 10, type: 'whiteFlower', color: 0xffffff, stem: 12,
+        leaves: [ { up: 4, side: 1 } ],
+        flowers: [ { x: -3, y: 0 }, { x: 3, y: 0 } ]
+    },
+    {
+        col: 13, type: 'yellowFlower', color: 0xf2c418, stem: 24,
+        leaves: [ { up: 5, side: -1 }, { up: 9, side: 1 }, { up: 14, side: -1 } ],
+        flowers: [ { x: 0, y: 0 } ]
+    }
+];
+const COLOR_STEM = 0x2d6a4f;
+const STEM_WIDTH = 2;
+const LEAF_WIDTH = 5;
+const LEAF_HEIGHT = 3;
+const FLOWER_SIZE = 5;
 
 // --- Talking (Ihtoa) ---
 // How long the speech animation lasts, in milliseconds.
@@ -390,6 +420,9 @@ export class TestRoom extends Scene
         // Which room the water is in (its number in the ROOMS list, so 2 = Lake of Colors).
         this.waterRoom = roomAt(waterLeft);
 
+        // --- Lake of Colors: flower plants ---
+        this.decorateLake();
+
         // No fish at the start: they are made every time you walk into the water room.
         this.fishes = [];
 
@@ -601,6 +634,41 @@ export class TestRoom extends Scene
         });
     }
 
+    // Puts the flower plants (LAKE_PLANTS) on the ground of the Lake of Colors.
+    // Each plant is a few rectangles: a green stem, small green leaves, and colored flowers on top.
+    // They're drawn behind the player and aren't solid. Remembered in this.plants for Itta.
+    decorateLake ()
+    {
+        const left = roomLeft(this.waterRoom);
+        const ground = this.floorTop;
+
+        this.plants = LAKE_PLANTS.map((plant) => {
+            const x = left + plant.col * TILE + TILE / 2; // middle of the plant
+            const stemTop = ground - plant.stem;
+
+            // Stem
+            this.add.rectangle(x, ground - plant.stem / 2, STEM_WIDTH, plant.stem, COLOR_STEM)
+                .setDepth(-1);
+
+            // Leaves, sticking out to the left or right of the stem
+            plant.leaves.forEach((leaf) => {
+                this.add.rectangle(x + leaf.side * (LEAF_WIDTH / 2 + 1), ground - leaf.up,
+                    LEAF_WIDTH, LEAF_HEIGHT, COLOR_STEM)
+                    .setDepth(-1);
+            });
+
+            // Flowers
+            plant.flowers.forEach((flower) => {
+                this.add.rectangle(x + flower.x, stemTop + flower.y, FLOWER_SIZE, FLOWER_SIZE, plant.color)
+                    .setDepth(-1);
+            });
+
+            // For Itta: where the plant stands, and how wide it is (the widest flower spread).
+            const spread = Math.max(...plant.flowers.map((f) => Math.abs(f.x))) + FLOWER_SIZE / 2;
+            return { x, width: spread * 2, bottom: ground, type: plant.type };
+        });
+    }
+
     // Makes the Marketplace slope, from the plateau's edge down to the normal ground.
     // floorTop = where the normal ground starts (in pixels from the top).
     makeSlope (floorTop)
@@ -739,15 +807,25 @@ export class TestRoom extends Scene
     }
 
     // Itta: look at what's in front of the player. No animation; a dialogue box opens.
-    // For now only the Marketplace NPCs can be inspected (their "inspect" text in
-    // src/data/npcs.json). Anywhere else, a placeholder text from src/data/menu.json.
+    // Things that can be inspected: the Marketplace NPCs (their "inspect" text in
+    // src/data/npcs.json) and the Lake's flower plants (src/data/plants.json).
+    // Anywhere else, a placeholder text from src/data/menu.json.
     // (Uses the same reach as Ihtoa.)
     inspect ()
     {
         const npc = this.npcInFront();
-        const text = npc
-            ? npcText[npc.type].inspect
-            : menuText.messages.nothingToInspect;
+        // (You walk through plants, so a plant you're standing in counts too.)
+        const plant = this.plants.find((p) => this.isInFront(p.x, p.width, p.bottom, true));
+
+        let text = menuText.messages.nothingToInspect;
+        if (npc)
+        {
+            text = npcText[npc.type].inspect;
+        }
+        else if (plant)
+        {
+            text = plantText[plant.type].inspect;
+        }
 
         this.scene.get('Overlay').openDialogue(text);
     }
@@ -755,20 +833,31 @@ export class TestRoom extends Scene
     // The NPC standing right in front of the player (see TALK_REACH), or null.
     npcInFront ()
     {
-        const body = this.player.body;
-
         return this.npcs.find((npc) => {
             const box = npc.box;
-
-            // Space between the player's front and the NPC's near side.
-            const gap = this.facing === 1
-                ? (box.x - box.width / 2) - body.right
-                : body.left - (box.x + box.width / 2);
-
-            // The NPC must be in front (not behind), close enough, and at about the same height.
-            const sameHeight = Math.abs(box.y - this.player.y) < 12;
-            return gap >= -box.width && gap <= TALK_REACH && sameHeight;
+            return this.isInFront(box.x, box.width, box.y + box.height / 2);
         }) ?? null;
+    }
+
+    // Is something right in front of the player?
+    // x = its middle, width = how wide it is, bottom = where its lower edge is (in pixels).
+    // It must be in front (not behind), at most TALK_REACH away, and stand at about the
+    // same height as the player (their lower edges less than 12 pixels apart).
+    // overlapOk = true: it also counts if the player is standing in it (for things you walk through).
+    isInFront (x, width, bottom, overlapOk = false)
+    {
+        const body = this.player.body;
+
+        // Space between the player's front and the thing's near side.
+        const gap = this.facing === 1
+            ? (x - width / 2) - body.right
+            : body.left - (x + width / 2);
+
+        // How far "into" it the player may be: NPCs only a little, walk-through things all the way.
+        const minGap = overlapOk ? -(width + body.width) : -width;
+
+        const sameHeight = Math.abs(bottom - body.bottom) < 12;
+        return gap >= minGap && gap <= TALK_REACH && sameHeight;
     }
 
     // Placeholder speech animation: a small white box above the speaker's head

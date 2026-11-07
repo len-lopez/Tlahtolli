@@ -1,0 +1,11 @@
+{
+    "redFlower": {
+        "inspect": { "words": [ { "nah": "Ca", "en": "It's a" }, { "nah": "chichiltic", "en": "red" }, { "nah": "xochitl.", "en": "flower." } ] }
+    },
+    "whiteFlower": {
+        "inspect": { "words": [ { "nah": "Ca", "en": "It's a" }, { "nah": "iztac", "en": "white" }, { "nah": "xochitl.", "en": "flower." } ] }
+    },
+    "yellowFlower": {
+        "inspect": { "words": [ { "nah": "Ca", "en": "It's a" }, { "nah": "coztic", "en": "yellow" }, { "nah": "xochitl.", "en": "flower." } ] }
+    }
+}
