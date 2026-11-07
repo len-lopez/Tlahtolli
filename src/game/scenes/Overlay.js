@@ -477,8 +477,9 @@ export class Overlay extends Scene
 
         if (this.mode === 'dialogue')
         {
-            // An NPC is talking: q closes the dialogue box. Everything else does nothing.
-            if (event.key.toLowerCase() === 'q')
+            // An NPC is talking: q or w closes the dialogue box. Everything else does nothing.
+            const key = event.key.toLowerCase();
+            if (key === 'q' || key === 'w')
             {
                 this.closeDialogue();
             }
@@ -1853,7 +1854,7 @@ export class Overlay extends Scene
         this.dialogueAfterClose = afterClose;
     }
 
-    // q (or a click on the advance symbol) closes the dialogue box.
+    // q, w (or a click on the advance symbol) closes the dialogue box.
     closeDialogue ()
     {
         if (this.mode !== 'dialogue')
