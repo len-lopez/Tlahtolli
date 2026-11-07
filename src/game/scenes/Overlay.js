@@ -1363,7 +1363,7 @@ export class Overlay extends Scene
         {
             // Wrong box: it turns red, and the fish gets away.
             pressed.box.setFillStyle(COLOR_WRONG);
-            this.finishMinigame(false, true);
+            this.finishMinigame(false);
             return;
         }
 
@@ -1393,8 +1393,7 @@ export class Overlay extends Scene
     }
 
     // Ends the minigame and tells the room whether the fish was caught.
-    // wrongBox = true if it failed because a wrong box was pressed (not because time ran out).
-    finishMinigame (success, wrongBox = false)
+    finishMinigame (success)
     {
         // Caught or not: the whole word appears for a moment, in the same place
         // as the spelled-out part (which is hidden, so the two don't overlap).
@@ -1413,11 +1412,8 @@ export class Overlay extends Scene
         const game = this.minigame;
         this.mode = 'reveal';
 
-        if (wrongBox)
-        {
-            // Wrong box (already red): all boxes shake quickly.
-            this.shakeBoxes();
-        }
+        // Wrong box (already red) or time ran out: all boxes shake quickly.
+        this.shakeBoxes();
 
         // When the display is over: remove it and give the powers back.
         game.timers.push(this.time.delayedCall(REVEAL_TIME, () => {
