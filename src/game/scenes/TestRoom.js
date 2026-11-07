@@ -52,10 +52,12 @@ const SLOPE_WIDTH = 18;     // the slope: the 18 tiles right after the plateau
 
 // The slope is not made of tiles (tiles can only make blocky steps).
 // What you SEE is a smooth brown triangle.
-// What you WALK ON is an invisible staircase under it, with very small steps:
-// SLOPE_STEP pixels high each. Steps that small are climbed by just walking into them,
-// so you don't have to jump. (Bigger steps would stop you like a wall.)
-const SLOPE_STEP = 2;
+// What you WALK ON: there is nothing solid there. Instead, the game checks after every
+// physics step whether the player is on (or a little into) the slanted line, and if so,
+// puts the player's feet exactly onto it (see stickToSlope).
+// SLOPE_SNAP = how far above the line (in pixels) the feet may be and still get pulled
+// onto it. This keeps the player on the slope when walking down instead of hopping.
+const SLOPE_SNAP = 4;
 
 // How many tiles higher than the normal ground the Marketplace's TILES are in this column:
 // the plateau is 7, everywhere else 0 (the slope is added on top, see makeSlope).
@@ -266,7 +268,7 @@ export class TestRoom extends Scene
         this.physics.add.collider(this.player, floor);
 
         // ...and on the Marketplace slope.
-        this.physics.add.collider(this.player, this.makeSlope(floorTop));
+        this.makeSlope(floorTop);
 
         // Which way the player is looking: 1 = right, -1 = left.
         // Changes whenever you walk left or right.
@@ -485,12 +487,14 @@ export class TestRoom extends Scene
 
     // Makes the Marketplace slope, from the plateau's edge down to the normal ground.
     // floorTop = where the normal ground starts (in pixels from the top).
-    // Returns the invisible steps, so the player can be made to stand on them.
     makeSlope (floorTop)
     {
         const left = roomLeft(0) + PLATEAU_WIDTH * TILE;  // where the slope starts (top)
         const width = SLOPE_WIDTH * TILE;
         const height = PLATEAU_HEIGHT * TILE;             // from the ground up to the plateau
+
+        // Remembered for stickToSlope.
+        this.slope = { left, right: left + width, top: floorTop - height, bottom: floorTop };
 
         // What you see: a brown triangle, same color as the floor tiles.
         // Its corners: top left (at the plateau's edge), bottom right, bottom left.
@@ -503,25 +507,54 @@ export class TestRoom extends Scene
             left, floorTop
         );
 
-        // What you walk on: invisible blocks side by side, each SLOPE_STEP pixels
-        // lower than the one to its left. Together they follow the triangle's slanted side.
-        const count = height / SLOPE_STEP;  // how many steps
-        const stepWidth = width / count;
-        const steps = [];
+        // After every physics step, keep the player on the slope.
+        // (Stop doing that when the room restarts after loading a save file.)
+        this.physics.world.on('worldstep', this.stickToSlope, this);
+        this.events.once('shutdown', () => this.physics.world.off('worldstep', this.stickToSlope, this));
+    }
 
-        for (let i = 0; i < count; i++)
+    // Height of the slanted line (in pixels from the top of the screen) at a spot x.
+    // Spots left or right of the slope count as its top or bottom end.
+    slopeSurfaceAt (x)
+    {
+        const s = this.slope;
+        const clamped = Math.min(Math.max(x, s.left), s.right);
+        const share = (clamped - s.left) / (s.right - s.left); // 0 at the top end, 1 at the bottom end
+        return s.top + share * (s.bottom - s.top);
+    }
+
+    // Runs after every physics step: if the player is over the slope, isn't jumping up,
+    // and the feet are on, under, or just above the slanted line,
+    // the feet are put exactly onto the line, and the player counts as standing.
+    stickToSlope ()
+    {
+        const body = this.player.body;
+        const s = this.slope;
+
+        // Not over the slope at all.
+        if (body.right <= s.left || body.left >= s.right)
         {
-            const stepHeight = height - i * SLOPE_STEP;
-            const block = this.add.rectangle(left + i * stepWidth, floorTop - stepHeight, stepWidth, stepHeight)
-                .setOrigin(0, 0)
-                .setVisible(false);
-
-            // true = a "static" body: solid, but it never moves or falls.
-            this.physics.add.existing(block, true);
-            steps.push(block);
+            return;
         }
 
-        return steps;
+        // Moving up (jumping with Choloa): leave the player alone.
+        if (body.velocity.y < 0)
+        {
+            return;
+        }
+
+        // The line is highest at the player's left side (the slope goes up towards the left),
+        // so that's the spot the player stands on, like standing on a corner.
+        const surface = this.slopeSurfaceAt(body.left);
+
+        if (body.bottom >= surface - SLOPE_SNAP)
+        {
+            body.position.y = surface - body.height;
+            body.velocity.y = 0;
+            body.blocked.down = true; // counts as standing (for Choloa and Cochi)
+            body.blocked.none = false;
+            body.updateCenter();
+        }
     }
 
     // Where the player appears when arriving in a room (start, save file, Map):
