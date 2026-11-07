@@ -1279,7 +1279,8 @@ export class Overlay extends Scene
     }
 
     // A key press while the shop window is open. Two steps:
-    // 1. Choosing an item:  up/down = choose, q = pick an amount, w or Enter = close the window.
+    // 1. Choosing an item:  up/down = choose, q = pick an amount (or close the window if
+    //                       there is nothing to choose), w or Enter = close the window.
     // 2. Picking an amount: up/down = 1 more/less, right/left = 10 more/less,
     //                       q = buy/sell, w = back to choosing, Enter = close the window.
     handleTradeKey (event)
@@ -1340,7 +1341,9 @@ export class Overlay extends Scene
         const entries = this.tradeEntries();
         if (entries.length === 0)
         {
-            return; // nothing to buy or sell
+            // Nothing to buy or sell (e.g. the bag is empty): q closes the window.
+            this.closeTrade();
+            return;
         }
 
         const item = entries[this.tradeChosen];
