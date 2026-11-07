@@ -124,6 +124,7 @@ export class Overlay extends Scene
         // 'fishing'  = the fishing line is out (no powers, no menu)
         // 'minigame' = a fish bit, q/w/e boxes are on screen
         // 'reveal'   = catch failed, the boxes show the right order for a moment
+        // 'dialogue' = an NPC is talking, the dialogue box is open
         this.mode = 'play';
 
         // The fishing minigame while it's running, or null.
@@ -277,6 +278,26 @@ export class Overlay extends Scene
         this.typed = '';          // what has been typed so far
         this.promptSlot = null;   // which slot (q, w or e) the word is for
 
+        // --- Dialogue box: what an NPC says (Ihtoa), hidden at the start ---
+        // A wide box near the bottom of the screen, with the text inside,
+        // and the hint "(q) confirm" at the bottom left (q closes it).
+        this.dialogue = this.add.container(0, 0).setVisible(false);
+
+        const dialogueBox = this.add.rectangle(w / 2, h - 52, w - 80, 44, 0x222222, 0.9)
+            .setStrokeStyle(1, 0xffffff);
+        this.dialogueText = this.add.text(48, h - 52 - 22 + 8, '',
+            { ...TEXT_STYLE, wordWrap: { width: w - 80 - 16 } });
+
+        // Clicking the box does the same as pressing q.
+        dialogueBox.setInteractive({ useHandCursor: true });
+        dialogueBox.on('pointerdown', () => this.closeDialogue());
+
+        const qCircle = this.add.circle(18, h - 14, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
+        const qLetter = this.add.text(18, h - 14, 'q', TEXT_STYLE).setOrigin(0.5);
+        const qLabel = this.add.text(34, h - 14, menuText.buttons.confirm, TEXT_STYLE).setOrigin(0, 0.5);
+
+        this.dialogue.add([ dialogueBox, this.dialogueText, qCircle, qLetter, qLabel ]);
+
         // Every key press goes through here.
         this.input.keyboard.on('keydown', (event) => this.handleKey(event));
 
@@ -328,10 +349,20 @@ export class Overlay extends Scene
             return;
         }
 
+        if (this.mode === 'dialogue')
+        {
+            // An NPC is talking: q closes the dialogue box. Everything else does nothing.
+            if (event.key.toLowerCase() === 'q')
+            {
+                this.closeDialogue();
+            }
+            return;
+        }
+
         if (event.key === 'Enter')
         {
-            // While sleeping (Cochi), the menu can't be opened.
-            if (!this.isSleeping())
+            // While sleeping (Cochi) or talking (Ihtoa), the menu can't be opened.
+            if (!this.isBusy())
             {
                 this.openMenu();
             }
@@ -359,8 +390,8 @@ export class Overlay extends Scene
         else if (slot.word === null)
         {
             // q/w/e on an empty slot opens the text prompt
-            // (but not while sleeping: then nothing happens).
-            if (!this.isSleeping())
+            // (but not while sleeping or talking: then nothing happens).
+            if (!this.isBusy())
             {
                 this.openPrompt(letter);
             }
@@ -1012,9 +1043,10 @@ export class Overlay extends Scene
         };
         let word = words[this.mode] ?? '';
 
-        // While sleeping, Enter does nothing either, so it's hidden too.
+        // While sleeping, talking (Ihtoa) or with the dialogue box open,
+        // Enter does nothing either, so it's hidden too.
         const fishing = [ 'fishing', 'minigame', 'reveal' ].includes(this.mode);
-        const hidden = fishing || this.isSleeping();
+        const hidden = fishing || this.mode === 'dialogue' || this.isBusy();
         this.enterButton.setVisible(!hidden);
         if (hidden)
         {
@@ -1050,10 +1082,37 @@ export class Overlay extends Scene
         }
     }
 
-    // True while the player is asleep (Cochi). The room knows this.
-    isSleeping ()
+    // True while the player is asleep (Cochi) or doing the speech animation (Ihtoa):
+    // then the menu and the powers can't be used. The room knows this.
+    isBusy ()
     {
-        return this.scene.get('TestRoom').sleep !== null;
+        const room = this.scene.get('TestRoom');
+        return room.sleep !== null || room.talking !== null;
+    }
+
+    // ---------- Dialogue (Ihtoa) ----------
+
+    // Called by the room when the player talks to an NPC: shows what the NPC says.
+    // While the box is open, the player can't walk, use powers or open the menu.
+    openDialogue (text)
+    {
+        this.mode = 'dialogue';
+        this.dialogueText.setText(text);
+        this.dialogue.setVisible(true);
+        this.qweButtons.setVisible(false);
+    }
+
+    // q (or a click on the box) closes the dialogue box.
+    closeDialogue ()
+    {
+        if (this.mode !== 'dialogue')
+        {
+            return;
+        }
+
+        this.mode = 'play';
+        this.dialogue.setVisible(false);
+        this.qweButtons.setVisible(true);
     }
 
     // ---------- Life points ----------
