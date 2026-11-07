@@ -8,6 +8,12 @@
         "inspect": { "nah": "(demo) He is counting cacao beans.", "en": "He is counting cacao beans." },
         "sells": [ "michin" ]
     },
+    "clothBuyer": {
+        "line": { "nah": "(demo) I want to buy cloth.", "en": "I want to buy cloth." },
+        "request": { "nah": "(demo) If you ask around the other merchants and find me the best price, I'll pay you a commission. Will you?", "en": "If you ask around the other merchants and find me the best price, I'll pay you a commission. Will you?" },
+        "inspect": { "nah": "(demo) He seems to be looking for something.", "en": "He seems to be looking for something." },
+        "sells": [ "michin" ]
+    },
     "judge": {
         "line": { "nah": "Tianquizpan nitlayacanqui.", "en": "I am the leader of the market." },
         "inspect": { "nah": "Ca tianquizpan tlayacanqui.", "en": "It's the leader of the market." },

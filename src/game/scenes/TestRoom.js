@@ -98,7 +98,7 @@ function buildMarketplaceGrid ()
 // headband = the color of a thin band near the top of the box, or null for none.
 // wares    = (merchants only) little piles of goods lying on the mat next to them:
 //            x = left/right of the merchant's middle, width/height in pixels, and color.
-// 5 merchants (the first one is the bean counter) on the flat ground, 8 tiles apart (so their piles of counting objects
+// 5 merchants (the first one is the bean counter, the last one the cloth buyer) on the flat ground, 8 tiles apart (so their piles of counting objects
 // have room), the marketplace leader on the plateau under the roof.
 const MARKET_NPCS = [
     { col: 5, type: 'judge', height: 17, color: 0xf0ead6, headband: 0xb22222, wares: [] },
@@ -122,7 +122,8 @@ const MARKET_NPCS = [
         wares: [ { x: -11, width: 7, height: 3, color: 0x5a3a1a }, { x: -10, width: 5, height: 2, color: 0x5a3a1a } ]
     },
     {
-        col: 56, type: 'merchant', height: 16, color: 0x9467d0, headband: 0xffffff,
+        // The cloth buyer: a merchant who wants to buy cloth (see talkToClothBuyer).
+        col: 56, type: 'clothBuyer', height: 16, color: 0x9467d0, headband: 0xffffff,
         wares: [ { x: -12, width: 5, height: 5, color: 0xe9c46a }, { x: -7, width: 3, height: 3, color: 0xe9c46a } ]
     }
 ];
@@ -1067,6 +1068,12 @@ export class TestRoom extends Scene
                 return;
             }
 
+            if (npc.type === 'clothBuyer')
+            {
+                this.talkToClothBuyer(overlay);
+                return;
+            }
+
             overlay.openDialogue(npcText[npc.type].line);
             return;
         }
@@ -1079,7 +1086,8 @@ export class TestRoom extends Scene
     }
 
     // The bean counter counts out loud: one dialogue box per number word, from 1 to 20
-    // (from src/data/numbers.json; clicking the word shows its gloss, e.g. "Three").
+    // (from src/data/numbers.json), each with its digit in front, e.g. "3 · Eyi".
+    // Clicking it shows the gloss, e.g. "3 · Three".
     // q goes on to the next number; w stops counting at any time.
     // i = which number word to say now (0 = the first one).
     countAloud (overlay, i)
@@ -1088,7 +1096,19 @@ export class TestRoom extends Scene
         const isLast = i === numberWords.length - 1;
         const next = isLast ? null : () => this.countAloud(overlay, i + 1);
 
-        overlay.openDialogue({ nah: entry.word, en: entry.meaning }, next, true);
+        const digit = entry.number + ' · ';
+        overlay.openDialogue({ nah: digit + entry.word, en: digit + entry.meaning }, next, true);
+    }
+
+    // The cloth buyer says he wants to buy cloth, then asks: if you ask around the other
+    // merchants and find him the best price, he'll pay you a commission. Will you?
+    // Yes or no: for now, both just close the box.
+    talkToClothBuyer (overlay)
+    {
+        const text = npcText.clothBuyer;
+        overlay.openDialogue(text.line, () => {
+            overlay.openQuestion(text.request, () => {}, () => {});
+        });
     }
 
     // Forgets everything about the leader's counting task (when leaving the Marketplace).
