@@ -1,4 +1,5 @@
 import { Scene } from 'phaser';
+import npcText from '../../data/npcs.json';
 
 // Size of one tile in pixels. Tiled maps will use the same size later.
 const TILE = 16;
@@ -52,10 +53,12 @@ const SLOPE_WIDTH = 18;     // the slope: the 18 tiles right after the plateau
 
 // The slope is not made of tiles (tiles can only make blocky steps).
 // What you SEE is a smooth brown triangle.
-// What you WALK ON is an invisible staircase under it, with very small steps:
-// SLOPE_STEP pixels high each. Steps that small are climbed by just walking into them,
-// so you don't have to jump. (Bigger steps would stop you like a wall.)
-const SLOPE_STEP = 2;
+// What you WALK ON: there is nothing solid there. Instead, the game checks after every
+// physics step whether the player is on (or a little into) the slanted line, and if so,
+// puts the player's feet exactly onto it (see stickToSlope).
+// SLOPE_SNAP = how far above the line (in pixels) the feet may be and still get pulled
+// onto it. This keeps the player on the slope when walking down instead of hopping.
+const SLOPE_SNAP = 4;
 
 // How many tiles higher than the normal ground the Marketplace's TILES are in this column:
 // the plateau is 7, everywhere else 0 (the slope is added on top, see makeSlope).
@@ -83,10 +86,29 @@ function buildMarketplaceGrid ()
 
 // NPCs (people to talk to later) in the Marketplace: placeholder boxes,
 // the same size as the player (12 x 24) but purple.
-// col = the tile column they stand on, counted from the Marketplace's left edge.
-// 5 standing around in the right half, 1 on the plateau.
-const MARKET_NPCS = [ 5, 36, 41, 47, 52, 58 ];
+// col  = the tile column they stand on, counted from the Marketplace's left edge.
+// type = who they are; what they say is in src/data/npcs.json under that name.
+// 5 merchants standing around in the right half, the marketplace judge on the plateau.
+const MARKET_NPCS = [
+    { col: 5,  type: 'judge' },
+    { col: 36, type: 'merchant' },
+    { col: 41, type: 'merchant' },
+    { col: 47, type: 'merchant' },
+    { col: 52, type: 'merchant' },
+    { col: 58, type: 'merchant' }
+];
 const COLOR_NPC = 0x9b5de5;
+
+// --- Talking (Ihtoa) ---
+// How long the speech animation lasts, in milliseconds.
+const TALK_TIME = 1200;
+// How close an NPC must be to talk to it: the space between the player's front
+// and the NPC, in pixels (16 = one tile). The NPC must also stand at about the same height.
+const TALK_REACH = 16;
+// Placeholder speech animation: a small white box above the speaker's head that blinks.
+const SPEECH_WIDTH = 6;
+const SPEECH_HEIGHT = 4;
+const SPEECH_BLINK = 150; // milliseconds per blink (on or off)
 
 // All rooms, from left to right. The number in front is the room's place in this list.
 const ROOMS = [
@@ -249,10 +271,16 @@ export class TestRoom extends Scene
         this.grid = grid;
 
         // --- NPCs in the Marketplace: purple boxes standing on the ground ---
-        MARKET_NPCS.forEach((col) => {
-            const x = roomLeft(0) + col * TILE + TILE / 2;
-            this.add.rectangle(x, this.groundTopAt(x) - 12, 12, 24, COLOR_NPC);
+        // Remembered with their type, so Ihtoa can find them and know what they say.
+        this.npcs = MARKET_NPCS.map((npc) => {
+            const x = roomLeft(0) + npc.col * TILE + TILE / 2;
+            const box = this.add.rectangle(x, this.groundTopAt(x) - 12, 12, 24, COLOR_NPC);
+            return { box, type: npc.type };
         });
+
+        // While the player's own speech animation runs (Ihtoa with nobody in front):
+        // { bubble, timer }. null otherwise.
+        this.talking = null;
 
         // The player: a small green rectangle (12 x 24 pixels).
         // It starts 4 tiles from the left edge of the start room (the Empty Room).
@@ -266,7 +294,7 @@ export class TestRoom extends Scene
         this.physics.add.collider(this.player, floor);
 
         // ...and on the Marketplace slope.
-        this.physics.add.collider(this.player, this.makeSlope(floorTop));
+        this.makeSlope(floorTop);
 
         // Which way the player is looking: 1 = right, -1 = left.
         // Changes whenever you walk left or right.
@@ -423,13 +451,17 @@ export class TestRoom extends Scene
     // The action name comes from the word list (src/data/wordlist.json).
     doAction (action)
     {
-        // While sleeping, no power works.
-        if (this.sleep)
+        // While sleeping or during the speech animation, no power works.
+        if (this.sleep || this.talking)
         {
             return;
         }
 
-        if (action === 'sleep')
+        if (action === 'talk')
+        {
+            this.talk();
+        }
+        else if (action === 'sleep')
         {
             // Only on the ground, not in mid-air.
             if (this.player.body.blocked.down)
@@ -485,12 +517,14 @@ export class TestRoom extends Scene
 
     // Makes the Marketplace slope, from the plateau's edge down to the normal ground.
     // floorTop = where the normal ground starts (in pixels from the top).
-    // Returns the invisible steps, so the player can be made to stand on them.
     makeSlope (floorTop)
     {
         const left = roomLeft(0) + PLATEAU_WIDTH * TILE;  // where the slope starts (top)
         const width = SLOPE_WIDTH * TILE;
         const height = PLATEAU_HEIGHT * TILE;             // from the ground up to the plateau
+
+        // Remembered for stickToSlope.
+        this.slope = { left, right: left + width, top: floorTop - height, bottom: floorTop };
 
         // What you see: a brown triangle, same color as the floor tiles.
         // Its corners: top left (at the plateau's edge), bottom right, bottom left.
@@ -503,25 +537,54 @@ export class TestRoom extends Scene
             left, floorTop
         );
 
-        // What you walk on: invisible blocks side by side, each SLOPE_STEP pixels
-        // lower than the one to its left. Together they follow the triangle's slanted side.
-        const count = height / SLOPE_STEP;  // how many steps
-        const stepWidth = width / count;
-        const steps = [];
+        // After every physics step, keep the player on the slope.
+        // (Stop doing that when the room restarts after loading a save file.)
+        this.physics.world.on('worldstep', this.stickToSlope, this);
+        this.events.once('shutdown', () => this.physics.world.off('worldstep', this.stickToSlope, this));
+    }
 
-        for (let i = 0; i < count; i++)
+    // Height of the slanted line (in pixels from the top of the screen) at a spot x.
+    // Spots left or right of the slope count as its top or bottom end.
+    slopeSurfaceAt (x)
+    {
+        const s = this.slope;
+        const clamped = Math.min(Math.max(x, s.left), s.right);
+        const share = (clamped - s.left) / (s.right - s.left); // 0 at the top end, 1 at the bottom end
+        return s.top + share * (s.bottom - s.top);
+    }
+
+    // Runs after every physics step: if the player is over the slope, isn't jumping up,
+    // and the feet are on, under, or just above the slanted line,
+    // the feet are put exactly onto the line, and the player counts as standing.
+    stickToSlope ()
+    {
+        const body = this.player.body;
+        const s = this.slope;
+
+        // Not over the slope at all.
+        if (body.right <= s.left || body.left >= s.right)
         {
-            const stepHeight = height - i * SLOPE_STEP;
-            const block = this.add.rectangle(left + i * stepWidth, floorTop - stepHeight, stepWidth, stepHeight)
-                .setOrigin(0, 0)
-                .setVisible(false);
-
-            // true = a "static" body: solid, but it never moves or falls.
-            this.physics.add.existing(block, true);
-            steps.push(block);
+            return;
         }
 
-        return steps;
+        // Moving up (jumping with Choloa): leave the player alone.
+        if (body.velocity.y < 0)
+        {
+            return;
+        }
+
+        // The line is highest at the player's left side (the slope goes up towards the left),
+        // so that's the spot the player stands on, like standing on a corner.
+        const surface = this.slopeSurfaceAt(body.left);
+
+        if (body.bottom >= surface - SLOPE_SNAP)
+        {
+            body.position.y = surface - body.height;
+            body.velocity.y = 0;
+            body.blocked.down = true; // counts as standing (for Choloa and Cochi)
+            body.blocked.none = false;
+            body.updateCenter();
+        }
     }
 
     // Where the player appears when arriving in a room (start, save file, Map):
@@ -554,9 +617,85 @@ export class TestRoom extends Scene
     }
 
     // Puts the eye on the front side of the player, near the top.
+    // (The speech box, while the player is talking, moves along too.)
     updateFace ()
     {
         this.eye.setPosition(this.player.x + this.facing * 3, this.player.y - 7);
+
+        if (this.talking)
+        {
+            this.placeSpeech(this.talking.bubble, this.player, this.facing);
+        }
+    }
+
+    // ---------- Talking (Ihtoa) ----------
+
+    // Ihtoa: if an NPC stands right in front of the player, the NPC talks
+    // (speech animation + dialogue box). Otherwise the player does the speech animation,
+    // which does nothing else; menu and powers can't be used until it's over.
+    talk ()
+    {
+        const npc = this.npcInFront();
+
+        if (npc)
+        {
+            // The NPC's speech animation, and the dialogue box with its line.
+            this.speechAnimation(npc.box, 0);
+            this.scene.get('Overlay').openDialogue(npcText[npc.type].line);
+            return;
+        }
+
+        const bubble = this.speechAnimation(this.player, this.facing);
+        const timer = this.time.delayedCall(TALK_TIME, () => {
+            this.talking = null;
+        });
+        this.talking = { bubble, timer };
+    }
+
+    // The NPC standing right in front of the player (see TALK_REACH), or null.
+    npcInFront ()
+    {
+        const body = this.player.body;
+
+        return this.npcs.find((npc) => {
+            const box = npc.box;
+
+            // Space between the player's front and the NPC's near side.
+            const gap = this.facing === 1
+                ? (box.x - box.width / 2) - body.right
+                : body.left - (box.x + box.width / 2);
+
+            // The NPC must be in front (not behind), close enough, and at about the same height.
+            const sameHeight = Math.abs(box.y - this.player.y) < 12;
+            return gap >= -box.width && gap <= TALK_REACH && sameHeight;
+        }) ?? null;
+    }
+
+    // Placeholder speech animation: a small white box above the speaker's head
+    // blinks for TALK_TIME and then disappears.
+    // speaker = the player or an NPC box. side = 1/-1 to put the box a little to the
+    // front (right/left), 0 for the middle. Returns the box.
+    speechAnimation (speaker, side)
+    {
+        const bubble = this.add.rectangle(0, 0, SPEECH_WIDTH, SPEECH_HEIGHT, 0xffffff);
+        this.placeSpeech(bubble, speaker, side);
+
+        this.tweens.add({
+            targets: bubble,
+            alpha: { from: 1, to: 0 },
+            duration: SPEECH_BLINK,
+            yoyo: true,
+            repeat: -1
+        });
+        this.time.delayedCall(TALK_TIME, () => bubble.destroy());
+
+        return bubble;
+    }
+
+    // Puts the speech box just above the speaker's head.
+    placeSpeech (bubble, speaker, side)
+    {
+        bubble.setPosition(speaker.x + side * 4, speaker.y - speaker.height / 2 - 5);
     }
 
     // Is there water in front of the player, at most FISHING_REACH tiles away?
@@ -1074,6 +1213,11 @@ export class TestRoom extends Scene
         {
             // While the line is out you can't walk away.
             // (Enter pulls the line in early; see the overlay.)
+            this.player.body.setVelocityX(0);
+        }
+        else if (this.scene.get('Overlay').mode === 'dialogue')
+        {
+            // While an NPC is talking (dialogue box open) you can't walk away.
             this.player.body.setVelocityX(0);
         }
         else if (this.cursors.left.isDown)

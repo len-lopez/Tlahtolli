@@ -1,5 +1,6 @@
 [
     { "word": "Choloa", "action": "jump" },
     { "word": "Michma", "action": "fish" },
-    { "word": "Cochi", "action": "sleep" }
+    { "word": "Cochi", "action": "sleep" },
+    { "word": "Ihtoa", "action": "talk" }
 ]
