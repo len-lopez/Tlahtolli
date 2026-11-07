@@ -1,6 +1,7 @@
 import { Scene } from 'phaser';
 import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
+import { nahuatl } from '../language.js';
 
 // Size of one tile in pixels. Tiled maps will use the same size later.
 const TILE = 16;
@@ -728,7 +729,7 @@ export class TestRoom extends Scene
         const npc = this.npcInFront();
         const text = npc
             ? npcText[npc.type].inspect
-            : menuText.messages.nothingToInspect;
+            : nahuatl(menuText.messages.nothingToInspect);
 
         this.scene.get('Overlay').openDialogue(text);
     }
@@ -1046,12 +1047,12 @@ export class TestRoom extends Scene
         }
         else if (!npcText[npc.type].sells)
         {
-            overlay.openDialogue(menuText.messages.notInterested);
+            overlay.openDialogue(nahuatl(menuText.messages.notInterested));
         }
         else
         {
             const bubble = this.speechAnimation(npc.box, 0);
-            const question = kind === 'buy' ? menuText.messages.whatToBuy : menuText.messages.whatToSell;
+            const question = kind === 'buy' ? nahuatl(menuText.messages.whatToBuy) : nahuatl(menuText.messages.whatToSell);
 
             overlay.openDialogue(question, () => {
                 // The room stops while the shop window is open, so end the speech

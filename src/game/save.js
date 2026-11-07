@@ -7,7 +7,8 @@
 // Version 3: same as 2, but the Marketplace was added on the left, so the room numbers changed
 // (the game converts older save files by itself, see "Start room" in TestRoom.js).
 // Version 4: also cacao beans and the bag.
-const SAVE_VERSION = 4;
+// Version 5: also the settings (for now only the auxiliary language).
+const SAVE_VERSION = 5;
 
 // Makes the contents of a new save file.
 // state = what the game wants to remember:
@@ -15,6 +16,7 @@ const SAVE_VERSION = 4;
 //   life  = how many life points (Yollotl) the player has left
 //   beans = how many cacao beans the player has
 //   bag   = how many of each item is in the bag, e.g. { michin: 3 }
+//   settings = what is chosen in Settings, e.g. { auxLanguage: 'en' } (null = none)
 // More things (words, ...) will be added here later.
 export function createSave (state)
 {
@@ -26,7 +28,8 @@ export function createSave (state)
         life: state.life,
         beans: state.beans,
         // A copy of the bag, so the save file holds the numbers from this moment.
-        bag: { ...state.bag }
+        bag: { ...state.bag },
+        settings: { ...state.settings }
     };
 }
 
