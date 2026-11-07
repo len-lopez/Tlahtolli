@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import npcText from '../../data/npcs.json';
+import menuText from '../../data/menu.json';
 
 // Size of one tile in pixels. Tiled maps will use the same size later.
 const TILE = 16;
@@ -113,7 +114,7 @@ const SPEECH_BLINK = 150; // milliseconds per blink (on or off)
 // All rooms, from left to right. The number in front is the room's place in this list.
 const ROOMS = [
     buildMarketplaceGrid(), // 0 = Marketplace
-    buildRoomGrid(),     // 1 = Empty Room (where the game starts)
+    buildRoomGrid(),     // 1 = Home (where the game starts)
     buildWaterRoomGrid() // 2 = Lake of Colors: right half is water
 ];
 
@@ -122,13 +123,32 @@ const ROOMS = [
 // The player always stands on the ground in that column.
 const ROOM_ARRIVAL = [
     MARKET_WIDTH - 4, // Marketplace: bottom right, 4 tiles from its right edge
-    4,                // Empty Room: 4 tiles from the left edge
+    4,                // Home: 4 tiles from the left edge
     4                 // Lake of Colors: 4 tiles from the left edge
 ];
 
 // The room where a new game starts, and where you wake up after blacking out:
-// the Empty Room.
+// Home.
 const START_ROOM = 1;
+
+// --- Home: placeholder house and trees (only to look at; you walk past them) ---
+// Columns are counted from Home's left edge.
+const HOUSE_COL = 12;        // where the house's left wall starts
+const HOUSE_WIDTH = 8;       // in tiles
+const HOUSE_HEIGHT = 5;      // walls, in tiles
+const ROOF_OVERHANG = 1;     // how many tiles the roof sticks out on each side
+const ROOF_HEIGHT = 2;       // in tiles
+const COLOR_WALL = 0xd9b38c;
+const COLOR_ROOF = 0xc9a227;
+const COLOR_DOOR = 0x4a2f1b;
+
+// Trees: the column of each trunk.
+const HOME_TREES = [ 2, 8, 23, 28 ];
+const TRUNK_WIDTH = 6;       // in pixels
+const TRUNK_HEIGHT = 24;
+const CROWN_SIZE = 28;       // the green square on top
+const COLOR_TRUNK = 0x6b4423;
+const COLOR_CROWN = 0x2d6a4f;
 
 // Fish: small colored rectangles (10 x 5 pixels) in these colors.
 // The name must match a "meaning" in src/data/fishing-words.json (upper/lower case doesn't matter).
@@ -270,6 +290,9 @@ export class TestRoom extends Scene
         // Remembered, to look up where the ground is (see groundTopAt).
         this.grid = grid;
 
+        // --- Home: house and trees ---
+        this.decorateHome();
+
         // --- NPCs in the Marketplace: purple boxes standing on the ground ---
         // Remembered with their type, so Ihtoa can find them and know what they say.
         this.npcs = MARKET_NPCS.map((npc) => {
@@ -283,7 +306,7 @@ export class TestRoom extends Scene
         this.talking = null;
 
         // The player: a small green rectangle (12 x 24 pixels).
-        // It starts 4 tiles from the left edge of the start room (the Empty Room).
+        // It starts 4 tiles from the left edge of the start room (Home).
         const floorTop = (ROOM_HEIGHT - FLOOR_ROWS) * TILE;
         const start = this.roomSpawn(START_ROOM);
         this.player = this.add.rectangle(start.x, start.y, 12, 24, 0x2ecc71);
@@ -359,17 +382,17 @@ export class TestRoom extends Scene
         this.mapHeight = map.heightInPixels;
 
         // --- Start room ---
-        // A new game starts in the Empty Room.
+        // A new game starts in Home.
         // After loading a save file, the player starts in the saved room instead,
         // at that room's arrival spot (see ROOM_ARRIVAL), standing on the ground.
-        // A save file without a room, or with a room that doesn't exist, starts in the Empty Room.
+        // A save file without a room, or with a room that doesn't exist, starts in Home.
         let startRoom = START_ROOM;
         if (data && data.save)
         {
             let savedRoom = data.save.room;
 
             // Save files from before the Marketplace was added (version 1 and 2)
-            // counted the Empty Room as 0 and the Lake as 1. Now the Marketplace is 0,
+            // counted Home as 0 and the Lake as 1. Now the Marketplace is 0,
             // so everything moved one place to the right: add 1 to old room numbers.
             if (data.save.version < 3 && Number.isInteger(savedRoom))
             {
@@ -400,7 +423,7 @@ export class TestRoom extends Scene
             this.spawnFishes();
         }
 
-        // Where the player wakes up after blacking out: the Empty Room,
+        // Where the player wakes up after blacking out: Home,
         // at the same spot where the game starts.
         this.blackoutX = start.x;
         this.blackoutY = start.y;
@@ -461,6 +484,10 @@ export class TestRoom extends Scene
         {
             this.talk();
         }
+        else if (action === 'inspect')
+        {
+            this.inspect();
+        }
         else if (action === 'sleep')
         {
             // Only on the ground, not in mid-air.
@@ -513,6 +540,42 @@ export class TestRoom extends Scene
 
         const spot = this.roomSpawn(room);
         this.player.body.reset(spot.x, spot.y);
+    }
+
+    // Draws the placeholder house and trees in Home, all made of rectangles.
+    // They are drawn behind everything else (depth -1), so the player walks in front of them.
+    decorateHome ()
+    {
+        const left = roomLeft(START_ROOM);
+        const ground = (ROOM_HEIGHT - FLOOR_ROWS) * TILE; // top of the ground, in pixels
+
+        // House: walls, a roof that is a bit wider, and a door in the middle.
+        const houseLeft = left + HOUSE_COL * TILE;
+        const houseWidth = HOUSE_WIDTH * TILE;
+        const wallsTop = ground - HOUSE_HEIGHT * TILE;
+
+        this.add.rectangle(houseLeft, wallsTop, houseWidth, HOUSE_HEIGHT * TILE, COLOR_WALL)
+            .setOrigin(0, 0).setDepth(-1);
+
+        this.add.rectangle(houseLeft - ROOF_OVERHANG * TILE, wallsTop - ROOF_HEIGHT * TILE,
+            houseWidth + 2 * ROOF_OVERHANG * TILE, ROOF_HEIGHT * TILE, COLOR_ROOF)
+            .setOrigin(0, 0).setDepth(-1);
+
+        const doorWidth = 20;
+        const doorHeight = 36;
+        this.add.rectangle(houseLeft + (houseWidth - doorWidth) / 2, ground - doorHeight,
+            doorWidth, doorHeight, COLOR_DOOR)
+            .setOrigin(0, 0).setDepth(-1);
+
+        // Trees: a brown trunk with a green square on top.
+        HOME_TREES.forEach((col) => {
+            const x = left + col * TILE + TILE / 2; // middle of the tree
+
+            this.add.rectangle(x, ground - TRUNK_HEIGHT / 2, TRUNK_WIDTH, TRUNK_HEIGHT, COLOR_TRUNK)
+                .setDepth(-1);
+            this.add.rectangle(x, ground - TRUNK_HEIGHT - CROWN_SIZE / 2 + 4, CROWN_SIZE, CROWN_SIZE, COLOR_CROWN)
+                .setDepth(-1);
+        });
     }
 
     // Makes the Marketplace slope, from the plateau's edge down to the normal ground.
@@ -650,6 +713,20 @@ export class TestRoom extends Scene
             this.talking = null;
         });
         this.talking = { bubble, timer };
+    }
+
+    // Ittoa: look at what's in front of the player. No animation; a dialogue box opens.
+    // For now only the Marketplace NPCs can be inspected (their "inspect" text in
+    // src/data/npcs.json). Anywhere else, a placeholder text from src/data/menu.json.
+    // (Uses the same reach as Ihtoa.)
+    inspect ()
+    {
+        const npc = this.npcInFront();
+        const text = npc
+            ? npcText[npc.type].inspect
+            : menuText.messages.nothingToInspect;
+
+        this.scene.get('Overlay').openDialogue(text);
     }
 
     // The NPC standing right in front of the player (see TALK_REACH), or null.
@@ -1009,9 +1086,9 @@ export class TestRoom extends Scene
         }
     }
 
-    // Out of life: the screen goes black, and the player wakes up in the Empty Room
+    // Out of life: the screen goes black, and the player wakes up in Home
     // with full life again. The screen slowly fades back in.
-    // (The camera moves to the Empty Room by itself in the next frame, see update.)
+    // (The camera moves to Home by itself in the next frame, see update.)
     blackOut ()
     {
         this.player.body.reset(this.blackoutX, this.blackoutY);
@@ -1193,7 +1270,7 @@ export class TestRoom extends Scene
 
     update (time, delta)
     {
-        const speed = 80; // pixels per second
+        const speed = 100; // pixels per second (was 80)
 
         this.moveFishes(delta);
         this.updateFishing(delta);
@@ -1246,7 +1323,7 @@ export class TestRoom extends Scene
             this.fishing.line.lineBetween(tip.x, tip.y, float.x, float.y);
         }
 
-        // Which room is the player in? (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors)
+        // Which room is the player in? (0 = Marketplace, 1 = Home, 2 = Lake of Colors)
         const room = roomAt(this.player.x);
 
         // When the player walks into another room, the camera jumps there

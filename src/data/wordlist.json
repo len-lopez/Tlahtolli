@@ -2,5 +2,6 @@
     { "word": "Choloa", "action": "jump" },
     { "word": "Michma", "action": "fish" },
     { "word": "Cochi", "action": "sleep" },
-    { "word": "Ihtoa", "action": "talk" }
+    { "word": "Ihtoa", "action": "talk" },
+    { "word": "Ittoa", "action": "inspect" }
 ]
