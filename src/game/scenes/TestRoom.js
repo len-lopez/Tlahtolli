@@ -98,7 +98,8 @@ function buildMarketplaceGrid ()
 // headband = the color of a thin band near the top of the box, or null for none.
 // wares    = (merchants only) little piles of goods lying on the mat next to them:
 //            x = left/right of the merchant's middle, width/height in pixels, and color.
-// 5 merchants (the first one is the bean counter, the last one the cloth buyer) on the flat ground, 8 tiles apart (so their piles of counting objects
+// 5 merchants (the first one is the bean counter, the fourth the reed counter,
+// the last one the cloth buyer) on the flat ground, 8 tiles apart (so their piles of counting objects
 // have room), the marketplace leader on the plateau under the roof.
 const MARKET_NPCS = [
     { col: 5, type: 'judge', height: 17, color: 0xf0ead6, headband: 0xb22222, wares: [] },
@@ -118,8 +119,10 @@ const MARKET_NPCS = [
         wares: [ { x: -13, width: 4, height: 4, color: 0xd62828 }, { x: -8, width: 4, height: 4, color: 0xf2c418 } ]
     },
     {
-        col: 48, type: 'merchant', height: 14, color: 0x8a5cc9, headband: 0x2a9d8f,
-        wares: [ { x: -11, width: 7, height: 3, color: 0x5a3a1a }, { x: -10, width: 5, height: 2, color: 0x5a3a1a } ]
+        // The reed counter: a merchant who STANDS and ties reeds into bundles of twenty
+        // (see startReedCounting). Talking to him: he counts in twenties up to 400.
+        col: 48, type: 'reedCounter', height: 24, color: 0x8a5cc9, headband: 0x2a9d8f,
+        wares: []
     },
     {
         // The cloth buyer: a merchant who wants to buy cloth (see talkToClothBuyer).
@@ -186,14 +189,34 @@ const BEAN_COUNT_STEP = 700;   // milliseconds between two beans
 const BEAN_HOP_TIME = 400;     // how long one bean takes to fly over, in milliseconds
 const BEAN_HOP_HEIGHT = 12;    // how high it flies (his hand), in pixels above the mat
 
+// --- The reed counter's bundles ---
+// On the left of his mat lies a heap of loose reeds; every REED_STEP he ties a bundle
+// (of twenty) and lays it on a stack on the right of his mat. When the stack has
+// REED_STACK_MAX bundles, it's cleared and he starts a new one.
+const REED_STEP = 900;          // milliseconds between two bundles
+const REED_MOVE_TIME = 400;     // how long a bundle takes from his hands to the stack
+const REED_STACK_MAX = 4;
+const BUNDLE_WIDTH = 9;
+const BUNDLE_HEIGHT = 3;
+const COLOR_REED = 0xb5a35a;
+const COLOR_REED_TIE = 0x6b4423;
+// The loose reeds on the left: x = left/right of his middle, and how tall each reed is.
+const LOOSE_REEDS = [ { x: -15, h: 9 }, { x: -13, h: 11 }, { x: -11, h: 8 }, { x: -9, h: 10 } ];
+
 // --- The cloth buyer's task ---
 // When you accept, every other merchant names a price for a piece of cloth:
 // a random number from CLOTH_PRICE_MIN to CLOTH_PRICE_MAX (picked once, when the task starts).
 const CLOTH_PRICE_MIN = 20;
 const CLOTH_PRICE_MAX = 400;
 
-// The bean counter counts from 1 up to this number (the number list goes further).
-const COUNT_ALOUD_TO = 20;
+// What the bean counter counts: 1 to 20. What the reed counter counts: 20, 40, ... 400.
+const BEAN_COUNT_NUMBERS = numberWords.filter((e) => e.number <= 20);
+const REED_COUNT_NUMBERS = numberWords.filter((e) => e.number % 20 === 0 && e.number <= 400);
+
+// The commission the cloth buyer pays when you report the lowest price right, in cacao beans.
+const CLOTH_COMMISSION = 10;
+// After this many wrong reports he gives up (until you leave and come back).
+const CLOTH_MAX_WRONG = 3;
 
 // --- The leader's counting task ---
 // How many cacao beans the leader pays for each right answer.
@@ -863,6 +886,12 @@ export class TestRoom extends Scene
                 this.startBeanCounting(x, matTop);
             }
 
+            // The reed counter's reeds and bundles.
+            if (npc.type === 'reedCounter')
+            {
+                this.startReedCounting(x, matTop);
+            }
+
             // Wares lying on the mat.
             npc.wares.forEach((ware) => {
                 this.add.rectangle(x + ware.x, matTop - ware.height / 2, ware.width, ware.height, ware.color)
@@ -926,6 +955,51 @@ export class TestRoom extends Scene
                     }
                 });
                 moved += 1;
+            }
+        });
+    }
+
+    // The reed counter's animation: a heap of loose reeds on the left of his mat (LOOSE_REEDS),
+    // and every REED_STEP a new bundle appears in his hands and is laid on the stack on the
+    // right. When the stack has REED_STACK_MAX bundles, it's cleared and starts again.
+    // x = his middle, matTop = the top of his mat (in pixels).
+    startReedCounting (x, matTop)
+    {
+        LOOSE_REEDS.forEach((reed) => {
+            this.add.rectangle(x + reed.x, matTop - reed.h / 2, 1, reed.h, COLOR_REED).setDepth(-1);
+        });
+
+        const stackX = x + 11;
+        let stack = []; // the bundles on the stack right now
+
+        this.time.addEvent({
+            delay: REED_STEP,
+            loop: true,
+            callback: () => {
+                if (stack.length === REED_STACK_MAX)
+                {
+                    stack.forEach((bundle) => bundle.destroy());
+                    stack = [];
+                    return;
+                }
+
+                // A bundle: reeds lying sideways, with a dark tie in the middle.
+                // It appears in his hands (in front of him) and is laid on the stack.
+                const bundle = this.add.container(x, matTop - 14, [
+                    this.add.rectangle(0, 0, BUNDLE_WIDTH, BUNDLE_HEIGHT, COLOR_REED),
+                    this.add.rectangle(0, 0, 1, BUNDLE_HEIGHT, COLOR_REED_TIE)
+                ]).setDepth(1);
+                const landY = matTop - BUNDLE_HEIGHT / 2 - stack.length * BUNDLE_HEIGHT;
+                stack.push(bundle);
+
+                this.tweens.add({
+                    targets: bundle,
+                    x: stackX,
+                    y: landY,
+                    duration: REED_MOVE_TIME,
+                    ease: 'Sine.easeInOut',
+                    onComplete: () => bundle.setDepth(-1)
+                });
             }
         });
     }
@@ -1080,7 +1154,13 @@ export class TestRoom extends Scene
 
             if (npc.type === 'beanCounter')
             {
-                this.countAloud(overlay, 0);
+                this.countAloud(overlay, BEAN_COUNT_NUMBERS, 0);
+                return;
+            }
+
+            if (npc.type === 'reedCounter')
+            {
+                this.countAloud(overlay, REED_COUNT_NUMBERS, 0);
                 return;
             }
 
@@ -1101,16 +1181,16 @@ export class TestRoom extends Scene
         this.talking = { bubble, timer };
     }
 
-    // The bean counter counts out loud: one dialogue box per number word, from 1 to 20
-    // (from src/data/numbers.json), each with its digit in front, e.g. "3 · Eyi".
-    // Clicking it shows the gloss, e.g. "3 · Three".
+    // Counting out loud (the bean counter: 1 to 20, the reed counter: 20, 40, ... 400):
+    // one dialogue box per number word (from src/data/numbers.json), each with its digit
+    // in front, e.g. "3 · Eyi". Clicking it shows the gloss, e.g. "3 · Three".
     // q goes on to the next number; w stops counting at any time.
-    // i = which number word to say now (0 = the first one).
-    countAloud (overlay, i)
+    // numbers = which numbers to say; i = which of them to say now (0 = the first one).
+    countAloud (overlay, numbers, i)
     {
-        const entry = numberWords[i];
-        const isLast = entry.number >= COUNT_ALOUD_TO || i === numberWords.length - 1;
-        const next = isLast ? null : () => this.countAloud(overlay, i + 1);
+        const entry = numbers[i];
+        const isLast = i === numbers.length - 1;
+        const next = isLast ? null : () => this.countAloud(overlay, numbers, i + 1);
 
         const digit = entry.number + ' · ';
         overlay.openDialogue({ nah: digit + entry.word, en: digit + entry.meaning }, next, true);
@@ -1119,14 +1199,23 @@ export class TestRoom extends Scene
     // The cloth buyer says he wants to buy cloth, then asks: if you ask around the other
     // merchants and find him the best price, he'll pay you a commission. Will you?
     // Yes: the task starts (see startClothQuest). No: the box just closes.
-    // While the task is running, he only says that he wants to buy cloth.
+    // While the task is running, he asks which one is the lowest price you found,
+    // and you answer with the number minigame (see reportLowestPrice).
+    // The task can only be done once while you're in the Marketplace: afterwards he only
+    // thanks you (or, if he gave up, says he'll look for cloth another day).
     talkToClothBuyer (overlay)
     {
         const text = npcText.clothBuyer;
 
         if (this.clothQuest)
         {
-            overlay.openDialogue(text.line);
+            this.reportLowestPrice(overlay);
+            return;
+        }
+
+        if (this.clothDone)
+        {
+            overlay.openDialogue(this.clothGaveUp ? text.anotherDay : text.thanks);
             return;
         }
 
@@ -1158,17 +1247,84 @@ export class TestRoom extends Scene
         ];
         if (npc.type === 'beanCounter')
         {
-            options.push({ label: menuText.options.countForMe, action: () => this.countAloud(overlay, 0) });
+            options.push({ label: menuText.options.countForMe,
+                action: () => this.countAloud(overlay, BEAN_COUNT_NUMBERS, 0) });
+        }
+        if (npc.type === 'reedCounter')
+        {
+            options.push({ label: menuText.options.countForMe,
+                action: () => this.countAloud(overlay, REED_COUNT_NUMBERS, 0) });
         }
         overlay.openOptions(options);
     }
 
     // The merchant says his price for a piece of cloth, as a number word
-    // (from src/data/numbers.json), e.g. "Ompohualli omome." (gloss: "Forty-two.").
+    // (from src/data/numbers.json), e.g. "Ompohualli omome."
+    // It's "locked": during this task it can't be glossed (clicking it makes it blink red).
     sayClothPrice (overlay, npc)
     {
         const entry = numberWords.find((e) => e.number === npc.clothPrice);
-        overlay.openDialogue({ nah: entry.word + '.', en: entry.meaning + '.' });
+        overlay.openDialogue({ nah: entry.word + '.', en: entry.meaning + '.', locked: true });
+    }
+
+    // The cloth buyer asks which one is the lowest price you found; when the box is closed,
+    // the number minigame starts (like the leader's: order, choice, or typing), with the
+    // lowest of all the merchants' prices as the right answer.
+    reportLowestPrice (overlay)
+    {
+        const prices = this.npcs.filter((npc) => npc.clothPrice !== undefined).map((npc) => npc.clothPrice);
+        const lowest = Math.min(...prices);
+
+        overlay.openDialogue(npcText.clothBuyer.whichLowest, () => {
+            overlay.startNumberGame(
+                lowest,
+                (success, word) => this.clothReportResult(overlay, success, word),
+                () => this.afterWrongReport(overlay)
+            );
+        });
+    }
+
+    // The player answered the cloth buyer (success = right or wrong).
+    // Right: he pays the commission, and the task is done (for this visit).
+    // Wrong: one more wrong answer; after CLOTH_MAX_WRONG he gives up (also done for this visit).
+    // (What he says after a wrong answer comes in afterWrongReport, once the boxes are gone.)
+    clothReportResult (overlay, success, word)
+    {
+        // Count the answer for this word (for this session and for the save file).
+        recordAnswer(this.progress, word, success);
+
+        if (success)
+        {
+            this.endClothQuest(false);
+            this.beans += CLOTH_COMMISSION;
+            overlay.showBeans(this.beans);
+            overlay.openDialogue(npcText.clothBuyer.paid);
+            return;
+        }
+
+        this.clothWrong += 1;
+        if (this.clothWrong >= CLOTH_MAX_WRONG)
+        {
+            this.endClothQuest(true);
+        }
+    }
+
+    // After a wrong report, once the boxes are gone: "That doesn't sound right, check again",
+    // or, if he gave up, "maybe I'll look for cloth another day".
+    afterWrongReport (overlay)
+    {
+        const text = npcText.clothBuyer;
+        overlay.openDialogue(this.clothGaveUp ? text.anotherDay : text.checkAgain);
+    }
+
+    // Ends the cloth task for this visit: the merchants forget their prices
+    // (so they talk normally again). gaveUp = true if he gave up after too many wrong answers.
+    endClothQuest (gaveUp)
+    {
+        this.clothQuest = false;
+        this.clothDone = true;
+        this.clothGaveUp = gaveUp;
+        this.npcs.forEach((npc) => { delete npc.clothPrice; });
     }
 
     // Forgets everything about the Marketplace tasks (when leaving the Marketplace):
@@ -1181,7 +1337,12 @@ export class TestRoom extends Scene
         this.leaderAngry = false;
 
         // The cloth buyer's task too: it stops, and the merchants forget their prices.
+        // clothDone = the task was finished (or he gave up) during this visit;
+        // clothWrong = wrong reports so far.
         this.clothQuest = false;
+        this.clothDone = false;
+        this.clothGaveUp = false;
+        this.clothWrong = 0;
         (this.npcs ?? []).forEach((npc) => { delete npc.clothPrice; });
     }
 

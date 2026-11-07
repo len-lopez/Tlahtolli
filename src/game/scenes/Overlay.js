@@ -138,6 +138,9 @@ function shuffle (list)
 const COLOR_EMPTY = 0x333333;
 const COLOR_USED = 0x2e7d9a;
 const COLOR_EDITING = 0xf2c418; // outline of the q/w/e circle you're typing a word for
+const COLOR_LOCKED = '#e63946'; // a locked text blinks in this color when you try to gloss it
+const LOCKED_BLINKS = 3;          // how often it blinks
+const LOCKED_BLINK_TIME = 120;    // milliseconds red, then the same white
 const COLOR_GLOSS = '#f2c418';  // text color of glosses (English), so they stand out from Nahuatl
 const COLOR_BITE = '#ff5c5c';   // text color of "Quixtia" while a fish is biting
 const COLOR_CORRECT = 0x2e9a4a; // a minigame box turns this color when it's pressed in the right order
@@ -862,6 +865,36 @@ export class Overlay extends Scene
         return textObject;
     }
 
+    // Makes a text blink red a few times (LOCKED_BLINKS), then shows it normally again.
+    blinkRed (textObject)
+    {
+        if (textObject.blinking)
+        {
+            return; // already blinking
+        }
+        textObject.blinking = true;
+
+        const changes = LOCKED_BLINKS * 2; // red, white, red, white, ...
+        let done = 0;
+        this.time.addEvent({
+            delay: LOCKED_BLINK_TIME,
+            repeat: changes - 1,
+            callback: () => {
+                done += 1;
+                if (!textObject.active)
+                {
+                    return; // the text was removed in the meantime
+                }
+                const red = done % 2 === 1;
+                textObject.setColor(red ? COLOR_LOCKED : (textObject.gloss.color ?? TEXT_STYLE.color));
+                if (done === changes)
+                {
+                    textObject.blinking = false;
+                }
+            }
+        });
+    }
+
     // Puts a new text into a clickable text, in Nahuatl.
     // label = { nah: ..., en: ... }, or null for no text.
     setGlossLabel (textObject, label)
@@ -891,8 +924,17 @@ export class Overlay extends Scene
     }
 
     // A clickable text was clicked: switch between Nahuatl and English.
+    // A text whose label is "locked" (e.g. a merchant's price during the cloth task)
+    // can't be glossed: it blinks red instead.
     clickGlossText (textObject)
     {
+        const label = textObject.gloss.label;
+        if (label && label.locked && getAuxLanguage(this) === 'en')
+        {
+            this.blinkRed(textObject);
+            return;
+        }
+
         // Texts without both versions (e.g. placeholders) can't be switched.
         if (getAuxLanguage(this) !== 'en' || !hasGloss(textObject.gloss.label))
         {
