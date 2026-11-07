@@ -98,7 +98,7 @@ function buildMarketplaceGrid ()
 // headband = the color of a thin band near the top of the box, or null for none.
 // wares    = (merchants only) little piles of goods lying on the mat next to them:
 //            x = left/right of the merchant's middle, width/height in pixels, and color.
-// 5 merchants (the first one is the bean counter, the fourth the reed counter,
+// 5 merchants (the second one is the bean counter, the fourth the reed counter,
 // the last one the cloth buyer) on the flat ground, 8 tiles apart (so their piles of counting objects
 // have room), the marketplace leader on the plateau under the roof.
 const MARKET_NPCS = [
@@ -107,11 +107,11 @@ const MARKET_NPCS = [
         // The bean counter: a merchant who STANDS (as tall as the player) and keeps counting
         // cacao beans (see startBeanCounting). Talking to him: he counts from 1 to 20.
         // Instead of wares, his mat has the beans he's counting.
-        col: 24, type: 'beanCounter', height: 24, color: 0x9b5de5, headband: null,
+        col: 32, type: 'beanCounter', height: 24, color: 0x9b5de5, headband: null,
         wares: []
     },
     {
-        col: 32, type: 'merchant', height: 15, color: 0x7b4fc4, headband: 0xf2c418,
+        col: 24, type: 'merchant', height: 15, color: 0x7b4fc4, headband: 0xf2c418,
         wares: [ { x: -11, width: 8, height: 6, color: 0xb5651d } ]
     },
     {
