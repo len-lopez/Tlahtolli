@@ -22,8 +22,8 @@
     ],
     "buttons": {
         "menu": { "nah": "Xictlapo", "en": "Open" },
-        "confirm": { "nah": "Quemah", "en": "Confirm" },
-        "back": { "nah": "Ximocuepa", "en": "Back" },
+        "confirm": { "nah": "Quemah", "en": "Yes" },
+        "back": { "nah": "Ximocuepa", "en": "Go back" },
         "close": { "nah": "Xictzacua", "en": "Close" },
         "cancel": { "nah": "Amo", "en": "Cancel" }
     },
@@ -31,7 +31,7 @@
         "life": { "nah": "Yollotl", "en": "Life" }
     },
     "shop": {
-        "buy": { "nah": "Niccohua:", "en": "Buy:" },
+        "buy": { "nah": "Niccohua:", "en": "I'm buying:" },
         "sell": { "nah": "Nicnamaca:", "en": "Sell:" }
     },
     "messages": {
@@ -41,7 +41,7 @@
         "notEnoughCacao": { "nah": "Amo ixachi in mocacahuauh.", "en": "Not enough cacao." },
         "bought": { "nah": null, "en": "(Placeholder) Bought {count} {item}." },
         "sold": { "nah": null, "en": "(Placeholder) Sold {count} {item}." },
-        "whatToBuy": { "nah": "Tlein ticcohuaznequi?", "en": "What do you want to buy?" },
+        "whatToBuy": { "words": [ { "nah": "Tlein", "en": "What" }, { "nah": "ticcohuaznequi?", "en": "do you want to buy?" } ] },
         "whatToSell": { "words": [ { "nah": "Tle", "en": "What" }, { "nah": "ticnamacaznequi?", "en": "do you want to sell?" } ] },
         "bagEmpty": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "ipan", "en": "inside" }, { "nah": "moxiquipil.", "en": "your bag." } ] }
     }

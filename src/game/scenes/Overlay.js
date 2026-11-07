@@ -1690,7 +1690,8 @@ export class Overlay extends Scene
     // A key press while the shop window is open. Two steps:
     // 1. Choosing an item:  up/down = choose, q = pick an amount (or close the window if
     //                       there is nothing to choose), w or Enter = close the window.
-    // 2. Picking an amount: up/down = 1 more/less, right/left = 10 more/less,
+    // 2. Picking an amount: up/down = 1 more/less (down at 1 jumps to the most,
+    //                       up at the most jumps to 1), right/left = 10 more/less,
     //                       q = buy/sell, w = back to choosing, Enter = close the window.
     handleTradeKey (event)
     {
@@ -1708,8 +1709,21 @@ export class Overlay extends Scene
 
             if (key in steps)
             {
-                // Never below 1, never more than you can buy/sell.
-                this.tradeCount = Math.min(Math.max(this.tradeCount + steps[key], 1), this.tradeMax);
+                if (key === 'arrowdown' && this.tradeCount === 1)
+                {
+                    // Down at 1 jumps to the most you can buy/sell.
+                    this.tradeCount = this.tradeMax;
+                }
+                else if (key === 'arrowup' && this.tradeCount === this.tradeMax)
+                {
+                    // Up at the most you can buy/sell jumps back to 1.
+                    this.tradeCount = 1;
+                }
+                else
+                {
+                    // Never below 1, never more than you can buy/sell.
+                    this.tradeCount = Math.min(Math.max(this.tradeCount + steps[key], 1), this.tradeMax);
+                }
                 this.showTradeAmount();
             }
             else if (key === 'q')
