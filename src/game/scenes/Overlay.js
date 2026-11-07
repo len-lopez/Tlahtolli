@@ -70,6 +70,7 @@ const COLOR_EDITING = 0xf2c418; // outline of the q/w/e circle you're typing a w
 const COLOR_GLOSS = '#f2c418';  // text color of glosses (English), so they stand out from Nahuatl
 const COLOR_BITE = '#ff5c5c';   // text color of "Quixtia" while a fish is biting
 const COLOR_CORRECT = 0x2e9a4a; // a minigame box turns this color when it's pressed in the right order
+const COLOR_WRONG = 0xd62828;   // a minigame box turns this color when it's the wrong one
 
 const TEXT_STYLE = {
     fontFamily: 'Arial',
@@ -156,7 +157,7 @@ export class Overlay extends Scene
         // 'prompt'   = typing a word into a slot
         // 'fishing'  = the fishing line is out (no powers, no menu)
         // 'minigame' = a fish bit, q/w/e boxes are on screen
-        // 'reveal'   = catch failed, the boxes show the right order for a moment
+        // 'reveal'   = catch failed, the boxes and the whole word stay on screen for a moment
         // 'dialogue' = an NPC is talking, the dialogue box is open
         // 'trade'    = the shop window is open (buying with Cohua or selling with Namaca)
         this.mode = 'play';
@@ -1360,8 +1361,9 @@ export class Overlay extends Scene
 
         if (pressed.used || pressed.part !== game.parts[game.next])
         {
-            // Wrong box: the fish gets away.
-            this.finishMinigame(false, true);
+            // Wrong box: it turns red, and the fish gets away.
+            pressed.box.setFillStyle(COLOR_WRONG);
+            this.finishMinigame(false);
             return;
         }
 
@@ -1390,21 +1392,8 @@ export class Overlay extends Scene
         return this.scale.width / 2 + (slot - 1) * (BOX_WIDTH + BOX_GAP);
     }
 
-    // Slides a box to the position of its slot.
-    moveBox (b)
-    {
-        this.tweens.killTweensOf(b.holder); // stop any slide that is still going
-        this.tweens.add({
-            targets: b.holder,
-            x: this.boxSlotX(b.slot),
-            duration: 150,
-            ease: 'Quad.easeOut'
-        });
-    }
-
     // Ends the minigame and tells the room whether the fish was caught.
-    // wrongBox = true if it failed because a wrong box was pressed (not because time ran out).
-    finishMinigame (success, wrongBox = false)
+    finishMinigame (success)
     {
         // Caught or not: the whole word appears for a moment, in the same place
         // as the spelled-out part (which is hidden, so the two don't overlap).
@@ -1418,21 +1407,13 @@ export class Overlay extends Scene
             return;
         }
 
-        // Failed: show the right order for a moment.
+        // Failed: the boxes stay where they are for a moment, with the whole word above them.
         // q/w/e powers and the menu stay locked until it's over, but you can walk.
         const game = this.minigame;
         this.mode = 'reveal';
 
-        if (wrongBox)
-        {
-            // Wrong box: all boxes shake first, then slide into the right order.
-            this.shakeBoxes();
-            game.timers.push(this.time.delayedCall(SHAKE_TIME, () => this.showRightOrder()));
-        }
-        else
-        {
-            this.showRightOrder();
-        }
+        // Wrong box (already red) or time ran out: all boxes shake quickly.
+        this.shakeBoxes();
 
         // When the display is over: remove it and give the powers back.
         game.timers.push(this.time.delayedCall(REVEAL_TIME, () => {
@@ -1456,27 +1437,10 @@ export class Overlay extends Scene
                 x: { from: x - 3, to: x + 3 },
                 duration: SHAKE_TIME / 6,
                 yoyo: true,
-                repeat: 2
+                repeat: 2,
+                // The shake stops a little to the side: put the box back exactly in its place.
+                onComplete: () => { b.holder.x = x; }
             });
-        });
-    }
-
-    // After a failed catch: the boxes slide into the right order,
-    // to remind you of the word.
-    showRightOrder ()
-    {
-        const game = this.minigame;
-
-        // Give every box the slot of its part in the word.
-        // (If two parts are the same, each gets its own slot.)
-        const boxes = Object.values(game.boxes);
-        const placed = [];
-
-        game.parts.forEach((part, slot) => {
-            const b = boxes.find((box) => box.part === part && !placed.includes(box));
-            placed.push(b);
-            b.slot = slot;
-            this.moveBox(b);
         });
     }
 
