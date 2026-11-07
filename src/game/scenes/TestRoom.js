@@ -179,6 +179,10 @@ const APPROACH_SPEED = 15;
 // The interested fish takes at least this long to reach the float (milliseconds),
 // so you can always see it coming.
 const MIN_APPROACH_TIME = 1200;
+// When a fish bites, you have this long to pull (Quixtia) before it gets away (milliseconds).
+const PULL_TIME = 1000;
+// When a fish bites, the float is pulled this many pixels under the water and back up, again and again.
+const BITE_DIP = 4;
 // The interested fish is picked from this many fish closest to the float.
 const NEAREST_FISH = 3;
 // How likely each of those fish is to be the one. Only matters compared to the
@@ -837,7 +841,9 @@ export class TestRoom extends Scene
             waited: 0,         // milliseconds the float has been on the water
             // when (in milliseconds on the water) a fish gets interested
             interestAt: randomBetween(BITE_WAIT, BITE_WAIT + INTEREST_WINDOW),
-            hookedFish: null   // the fish swimming to the float or biting, or null
+            hookedFish: null,  // the fish swimming to the float or biting, or null
+            biting: false,     // true while a fish bites and you can pull (Quixtia)
+            pullTimer: null    // makes the fish get away if you don't pull in time
         };
 
         this.tweens.add({
@@ -987,8 +993,8 @@ export class TestRoom extends Scene
         });
     }
 
-    // The fish has reached the float and bites: it shakes, the float bobs,
-    // and the q/w/e minigame starts.
+    // The fish has reached the float and bites: it shakes and the float dips under the water.
+    // Now the player has PULL_TIME to pull (Quixtia). If they don't, the fish gets away.
     startBite (fish)
     {
         const float = this.fishing.float;
@@ -1002,16 +1008,41 @@ export class TestRoom extends Scene
             repeat: -1 // forever, until the minigame is over
         });
 
-        // The float bobs up and down.
+        // The float dips under the water and comes back up, again and again.
         this.tweens.add({
             targets: float,
-            y: { from: this.floorTop - 2, to: this.floorTop },
+            y: { from: this.floorTop - 2, to: this.floorTop - 2 + BITE_DIP },
             duration: 120,
             yoyo: true,
             repeat: -1
         });
 
-        const started = this.scene.get('Overlay').startMinigame(fish.colorName);
+        // The fish is biting now. If nobody pulls in time, the line comes back empty.
+        this.fishing.biting = true;
+        this.fishing.pullTimer = this.time.delayedCall(PULL_TIME, () => this.stopFishing());
+    }
+
+    // The player pressed "pull" (Quixtia) while the line is out.
+    // - A fish is biting: caught on the hook, the q/w/e minigame starts.
+    // - No fish biting yet (or one only swimming closer): the line just comes back in.
+    pullLine ()
+    {
+        if (!this.fishing)
+        {
+            return;
+        }
+
+        if (!this.fishing.biting)
+        {
+            this.stopFishing();
+            return;
+        }
+
+        // Pulled in time: stop the "too late" timer and start the minigame.
+        this.fishing.pullTimer.remove();
+        this.fishing.biting = false;
+
+        const started = this.scene.get('Overlay').startMinigame(this.fishing.hookedFish.colorName);
         if (!started)
         {
             // No word for this color in the fishing word list: the fish just gets away.
@@ -1154,6 +1185,12 @@ export class TestRoom extends Scene
         {
             this.tweens.killTweensOf(this.fishing.hookedFish.body); // stop shaking
             this.fishing.hookedFish.hooked = false;
+        }
+
+        // If a fish was biting and waiting to be pulled, that "too late" timer isn't needed anymore.
+        if (this.fishing.pullTimer)
+        {
+            this.fishing.pullTimer.remove();
         }
 
         this.tweens.killTweensOf(this.fishing.float);

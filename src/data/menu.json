@@ -25,7 +25,7 @@
         "confirm": { "nah": "Quemah", "en": "Yes" },
         "back": { "nah": "Ximocuepa", "en": "Go back" },
         "close": { "nah": "Xictzacua", "en": "Close" },
-        "cancel": { "nah": "Ahmo", "en": "Cancel" },
+        "pull": { "nah": "Quixtia", "en": "Pull" },
         "no": { "nah": "Ahmo", "en": "No" }
     },
     "hud": {
