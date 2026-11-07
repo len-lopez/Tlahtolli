@@ -64,6 +64,7 @@ function shuffle (list)
 const COLOR_EMPTY = 0x333333;
 const COLOR_USED = 0x2e7d9a;
 const COLOR_EDITING = 0xf2c418; // outline of the q/w/e circle you're typing a word for
+const COLOR_GLOSS = '#f2c418';  // text color of glosses (English), so they stand out from Nahuatl
 
 const TEXT_STYLE = {
     fontFamily: 'Arial',
@@ -275,7 +276,7 @@ export class Overlay extends Scene
 
         this.pages = {
             main: this.makeChoicePage('main', menuText.main),
-            bag: { container: this.add.container(0, 0), items: [], highlight: null, chosen: 0 },
+            bag: { container: this.add.container(0, 0), items: [], highlight: null, chosen: 0, glosses: [] },
             map: this.makeChoicePage('map', menuText.map),
             words: this.makeWordListPage(),
             save: this.makeChoicePage('save', menuText.save),
@@ -587,6 +588,7 @@ export class Overlay extends Scene
     showGloss (gloss)
     {
         gloss.line.setText(gloss.english ? english(gloss.label) : nahuatl(gloss.label));
+        gloss.line.setColor(gloss.english ? COLOR_GLOSS : TEXT_STYLE.color);
         gloss.button.setFillStyle(gloss.english ? COLOR_USED : COLOR_EMPTY);
     }
 
@@ -628,12 +630,14 @@ export class Overlay extends Scene
     // Writes what's in the bag onto the bag page. Called every time the bag is opened,
     // because what's inside changes while playing.
     // One line per item the player has (items with 0 are left out):
-    // placeholder picture on the left, name, and the number near the right edge.
+    // placeholder picture on the left, name, the number, and a gloss button at the right end.
     // Like the word list, it's only a list to read; nothing can be chosen on it.
     fillBagPage ()
     {
         const container = this.pages.bag.container;
         container.removeAll(true); // take away what was written last time
+        this.pages.bag.glosses = [];
+        const showButtons = getAuxLanguage(this) === 'en';
 
         const bag = this.scene.get('TestRoom').bag;
         const owned = items.filter((item) => (bag[item.id] ?? 0) > 0);
@@ -645,12 +649,23 @@ export class Overlay extends Scene
             const picture = this.add.rectangle(LIST_LEFT, top + LINE_HEIGHT / 2 - 1,
                 BAG_FISH_WIDTH, BAG_FISH_HEIGHT, COLOR_BAG_FISH).setOrigin(0, 0.5);
 
-            const name = this.add.text(LIST_LEFT + BAG_FISH_WIDTH + 6, top, item.name, TEXT_STYLE);
+            const name = this.add.text(LIST_LEFT + BAG_FISH_WIDTH + 6, top, nahuatl(item.name), TEXT_STYLE);
 
             // The number's right edge stays put, so bigger numbers grow to the left.
-            const amount = this.add.text(LIST_RIGHT, top, String(bag[item.id]), TEXT_STYLE).setOrigin(1, 0);
+            // It ends a little left of the gloss button.
+            const amount = this.add.text(GLOSS_X - GLOSS_SPACE, top, String(bag[item.id]), TEXT_STYLE).setOrigin(1, 0);
 
-            container.add([ picture, name, amount ]);
+            // Gloss button, like on the other menu pages: switches the name to English and back.
+            const button = this.add.rectangle(GLOSS_X, top + LINE_HEIGHT / 2 - 1, GLOSS_SIZE, GLOSS_SIZE, COLOR_EMPTY)
+                .setStrokeStyle(1, 0xffffff)
+                .setVisible(showButtons);
+            button.setInteractive({ useHandCursor: true });
+
+            const gloss = { line: name, label: item.name, button, english: false };
+            button.on('pointerdown', () => this.clickGloss('bag', gloss));
+            this.pages.bag.glosses.push(gloss);
+
+            container.add([ picture, name, amount, button ]);
         });
 
         // Nothing in the bag: "Your bag is empty."
@@ -812,13 +827,14 @@ export class Overlay extends Scene
         else if (id === 'download')
         {
             // The save file remembers which room the player is in, how many life points are left,
-            // how many cacao beans the player has, and what's in the bag.
+            // how many cacao beans the player has, what's in the bag, and the settings.
             const room = this.scene.get('TestRoom');
             downloadSave(createSave({
                 room: room.currentRoom,
                 life: room.life,
                 beans: room.beans,
-                bag: room.bag
+                bag: room.bag,
+                settings: { auxLanguage: getAuxLanguage(this) }
             }));
         }
         else if (id === 'upload')
@@ -842,8 +858,16 @@ export class Overlay extends Scene
     // Starts the room again from the beginning with the loaded save file.
     // Everything that is made at random (like the fish) is made new.
     // The overlay is restarted by the room, so the menu is closed afterwards.
+    // The saved settings are used too. A save file without settings (older version)
+    // keeps the settings that are chosen right now.
     loadSave (save)
     {
+        const language = save.settings ? save.settings.auxLanguage : undefined;
+        if (language === 'en' || language === null)
+        {
+            setAuxLanguage(this, language);
+        }
+
         this.scene.start('TestRoom', { save });
     }
 
@@ -1341,7 +1365,7 @@ export class Overlay extends Scene
 
             const picture = this.add.rectangle(LIST_LEFT, middle, BAG_FISH_WIDTH, BAG_FISH_HEIGHT, COLOR_BAG_FISH)
                 .setOrigin(0, 0.5);
-            const name = this.add.text(LIST_LEFT + BAG_FISH_WIDTH + 6, top, item.name, TEXT_STYLE);
+            const name = this.add.text(LIST_LEFT + BAG_FISH_WIDTH + 6, top, nahuatl(item.name), TEXT_STYLE);
 
             const price = this.tradeKind === 'buy' ? item.buyPrice : item.sellPrice;
             const priceText = this.add.text(SHOP_PRICE_RIGHT, top, String(price), TEXT_STYLE).setOrigin(1, 0);
@@ -1510,7 +1534,7 @@ export class Overlay extends Scene
         // {count} and {item} in the message (src/data/menu.json) are replaced
         // with the number and the item's name.
         let message = done
-            ? template.replace('{count}', count).replace('{item}', item.name)
+            ? template.replace('{count}', count).replace('{item}', nahuatl(item.name))
             : nahuatl(menuText.messages.notEnoughCacao);
 
         // Just sold the last thing: also say that the bag is empty now.
