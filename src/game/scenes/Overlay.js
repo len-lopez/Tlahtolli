@@ -331,16 +331,24 @@ export class Overlay extends Scene
             this.trade.add([ circle, letterText, labelText ]);
         });
 
-        // Amount line: shown under the list after choosing an item, to pick how many.
-        // A box with "x 3" on the left and the total price (with a bean) on the right.
+        // Amount picker: shown at the bottom of the window after choosing an item.
+        // "Buy:" or "Sell:" on the left, the number in the middle with arrows above and
+        // below it, and the total price (with a bean) on the right.
+        // AMOUNT_Y = the middle of that row: a little above the bottom edge of the panel.
+        const panelBottom = h / 2 + (h - 60) / 2;
+        const AMOUNT_Y = panelBottom - 28;
+        const AMOUNT_X = LIST_LEFT + 80; // middle of the number
+
         this.tradeAmount = this.add.container(0, 0).setVisible(false);
-        this.tradeAmountBox = this.add.rectangle(LIST_LEFT - 4, 0, MENU_WIDTH - 24, LINE_HEIGHT + 3)
-            .setOrigin(0, 0).setStrokeStyle(1, COLOR_EDITING);
-        this.tradeAmountText = this.add.text(LIST_LEFT, 0, '', TEXT_STYLE);
-        this.tradeTotalText = this.add.text(SHOP_PRICE_RIGHT, 0, '', TEXT_STYLE).setOrigin(1, 0);
-        this.tradeTotalBean = this.add.rectangle(LIST_RIGHT - SHOP_BEAN_WIDTH, 0, SHOP_BEAN_WIDTH, SHOP_BEAN_HEIGHT, COLOR_BEAN)
+        this.tradeAmountLabel = this.add.text(LIST_LEFT, AMOUNT_Y, '', TEXT_STYLE).setOrigin(0, 0.5);
+        this.tradeAmountText = this.add.text(AMOUNT_X, AMOUNT_Y, '', TEXT_STYLE).setOrigin(0.5);
+        const arrowUp = this.add.text(AMOUNT_X, AMOUNT_Y - 13, '▲', { ...TEXT_STYLE, fontSize: 8 }).setOrigin(0.5);
+        const arrowDown = this.add.text(AMOUNT_X, AMOUNT_Y + 13, '▼', { ...TEXT_STYLE, fontSize: 8 }).setOrigin(0.5);
+        this.tradeTotalText = this.add.text(SHOP_PRICE_RIGHT, AMOUNT_Y, '', TEXT_STYLE).setOrigin(1, 0.5);
+        this.tradeTotalBean = this.add.rectangle(LIST_RIGHT - SHOP_BEAN_WIDTH, AMOUNT_Y, SHOP_BEAN_WIDTH, SHOP_BEAN_HEIGHT, COLOR_BEAN)
             .setOrigin(0, 0.5);
-        this.tradeAmount.add([ this.tradeAmountBox, this.tradeAmountText, this.tradeTotalText, this.tradeTotalBean ]);
+        this.tradeAmount.add([ this.tradeAmountLabel, this.tradeAmountText, arrowUp, arrowDown,
+            this.tradeTotalText, this.tradeTotalBean ]);
         this.trade.add(this.tradeAmount);
 
         this.tradeKind = null;   // 'buy' or 'sell' while the window is open
@@ -562,6 +570,13 @@ export class Overlay extends Scene
 
             container.add([ picture, name, amount ]);
         });
+
+        // Nothing in the bag: "Your bag is empty."
+        if (owned.length === 0)
+        {
+            container.add(this.add.text(LIST_LEFT, LIST_TOP, menuText.messages.bagEmpty,
+                { ...TEXT_STYLE, wordWrap: { width: MENU_WIDTH - 32 } }));
+        }
     }
 
     openMenu ()
@@ -1242,14 +1257,14 @@ export class Overlay extends Scene
             }
         });
 
-        // The message and the amount line go under the last line
-        // (or at the top if the list is empty).
-        const belowList = LIST_TOP + entries.length * LINE_HEIGHT + 8;
-        this.tradeMessage.setY(belowList);
-        this.tradeAmountBox.setY(belowList - 2);
-        this.tradeAmountText.setY(belowList);
-        this.tradeTotalText.setY(belowList);
-        this.tradeTotalBean.setY(belowList + LINE_HEIGHT / 2 - 1);
+        // The message goes under the last line (or at the top if the list is empty).
+        this.tradeMessage.setY(LIST_TOP + entries.length * LINE_HEIGHT + 8);
+
+        // Selling with nothing to sell: "Your bag is empty."
+        if (this.tradeKind === 'sell' && entries.length === 0)
+        {
+            this.tradeMessage.setText(menuText.messages.bagEmpty);
+        }
 
         // If the chosen line is gone (sold out), choose the last line instead.
         this.tradeChosen = Math.min(this.tradeChosen, Math.max(entries.length - 1, 0));
@@ -1353,7 +1368,8 @@ export class Overlay extends Scene
         const item = this.tradeEntries()[this.tradeChosen];
         const price = this.tradeKind === 'buy' ? item.buyPrice : item.sellPrice;
 
-        this.tradeAmountText.setText('x ' + this.tradeCount);
+        this.tradeAmountLabel.setText(this.tradeKind === 'buy' ? menuText.shop.buy : menuText.shop.sell);
+        this.tradeAmountText.setText(String(this.tradeCount));
         this.tradeTotalText.setText(String(price * this.tradeCount));
     }
 
@@ -1390,21 +1406,32 @@ export class Overlay extends Scene
 
         // {count} and {item} in the message (src/data/menu.json) are replaced
         // with the number and the item's name.
-        this.tradeMessage.setText(done
+        let message = done
             ? template.replace('{count}', count).replace('{item}', item.name)
-            : menuText.messages.notEnoughCacao);
+            : menuText.messages.notEnoughCacao;
+
+        // Just sold the last thing: also say that the bag is empty now.
+        if (this.tradeKind === 'sell' && this.tradeEntries().length === 0)
+        {
+            message += '\n' + menuText.messages.bagEmpty;
+        }
+
+        this.tradeMessage.setText(message);
     }
 
     // ---------- Dialogue (Ihtoa) ----------
 
     // Called by the room when the player talks to an NPC: shows what the NPC says.
     // While the box is open, the player can't walk, use powers or open the menu.
-    openDialogue (text)
+    // afterClose (optional) = what should happen when the box is closed,
+    // e.g. opening the shop window after the merchant has asked what you want.
+    openDialogue (text, afterClose = null)
     {
         this.mode = 'dialogue';
         this.dialogueText.setText(text);
         this.dialogue.setVisible(true);
         this.qweButtons.setVisible(false);
+        this.dialogueAfterClose = afterClose;
     }
 
     // q (or a click on the box) closes the dialogue box.
@@ -1418,6 +1445,14 @@ export class Overlay extends Scene
         this.mode = 'play';
         this.dialogue.setVisible(false);
         this.qweButtons.setVisible(true);
+
+        // Do what should happen next, if anything (only once).
+        const next = this.dialogueAfterClose;
+        this.dialogueAfterClose = null;
+        if (next)
+        {
+            next();
+        }
     }
 
     // ---------- Life points ----------

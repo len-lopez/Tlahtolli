@@ -26,12 +26,19 @@
     "hud": {
         "life": "Yollotl"
     },
+    "shop": {
+        "buy": "Buy:",
+        "sell": "Sell:"
+    },
     "messages": {
         "badFile": "This file is not a Tlahtolli save file.",
         "nothingToInspect": "(Placeholder) There is nothing to inspect here.",
         "notInterested": "(Placeholder) Not interested.",
         "notEnoughCacao": "(Placeholder) Not enough cacao.",
         "bought": "(Placeholder) Bought {count} {item}.",
-        "sold": "(Placeholder) Sold {count} {item}."
+        "sold": "(Placeholder) Sold {count} {item}.",
+        "whatToBuy": "(Placeholder) What do you want to buy?",
+        "whatToSell": "(Placeholder) What do you want to sell?",
+        "bagEmpty": "(Placeholder) Your bag is empty."
     }
 }
