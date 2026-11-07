@@ -67,8 +67,12 @@ const TEXT_STYLE = {
     color: '#ffffff'
 };
 
+// Width of the menu panel (it sits in the middle of the screen).
+const MENU_WIDTH = 200;
+
 // Where the lines of the menu pages start on screen, and the space between lines.
-const LIST_LEFT = 60;
+// 512 is the width of the game screen (see main.js).
+const LIST_LEFT = (512 - MENU_WIDTH) / 2 + 16;
 const LIST_TOP = 45;
 const LINE_HEIGHT = 16;
 
@@ -140,9 +144,26 @@ export class Overlay extends Scene
         // 'save'  = download / upload a save file
         this.menu = this.add.container(0, 0).setVisible(false);
 
-        const panel = this.add.rectangle(w / 2, h / 2, w - 80, h - 60, 0x222222, 0.9)
+        const panel = this.add.rectangle(w / 2, h / 2, MENU_WIDTH, h - 60, 0x222222, 0.9)
             .setStrokeStyle(1, 0xffffff);
         this.menu.add(panel);
+
+        // --- Button hints at the bottom of the screen, only while the menu is open ---
+        // Bottom left: (q) confirm  (w) back. Bottom right, next to the Enter symbol: close.
+        const hintY = h - 14;
+
+        [ [ 'q', menuText.buttons.confirm ], [ 'w', menuText.buttons.back ] ].forEach(([ letter, label ], i) => {
+            const circleX = 18 + i * 80;
+            const circle = this.add.circle(circleX, hintY, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
+            const letterText = this.add.text(circleX, hintY, letter, TEXT_STYLE).setOrigin(0.5);
+            const labelText = this.add.text(circleX + 16, hintY, label, TEXT_STYLE).setOrigin(0, 0.5);
+            this.menu.add([ circle, letterText, labelText ]);
+        });
+
+        // "close" sits just to the left of the Enter symbol (which is at w - 20, 24 pixels wide).
+        const closeText = this.add.text(w - 20 - 12 - 6, hintY, menuText.buttons.close, TEXT_STYLE)
+            .setOrigin(1, 0.5);
+        this.menu.add(closeText);
 
         this.pages = {
             main: this.makeChoicePage(menuText.main),
@@ -151,7 +172,9 @@ export class Overlay extends Scene
         };
 
         // Message under the save choices, e.g. when an uploaded file isn't a save file.
-        this.saveMessage = this.add.text(LIST_LEFT, LIST_TOP + 3 * LINE_HEIGHT, '', TEXT_STYLE);
+        // (Long messages wrap onto the next line so they stay inside the panel.)
+        this.saveMessage = this.add.text(LIST_LEFT, LIST_TOP + 3 * LINE_HEIGHT, '',
+            { ...TEXT_STYLE, wordWrap: { width: MENU_WIDTH - 32 } });
         this.pages.save.container.add(this.saveMessage);
 
         Object.values(this.pages).forEach((page) => this.menu.add(page.container));
@@ -265,7 +288,7 @@ export class Overlay extends Scene
     {
         const container = this.add.container(0, 0);
 
-        const highlight = this.add.rectangle(LIST_LEFT - 4, LIST_TOP - 1, 160, LINE_HEIGHT - 1, COLOR_USED)
+        const highlight = this.add.rectangle(LIST_LEFT - 4, LIST_TOP - 1, MENU_WIDTH - 24, LINE_HEIGHT - 1, COLOR_USED)
             .setOrigin(0, 0);
         container.add(highlight);
 
@@ -385,7 +408,8 @@ export class Overlay extends Scene
         }
         else if (id === 'download')
         {
-            downloadSave(createSave());
+            // The save file remembers which room the player is in.
+            downloadSave(createSave({ room: this.scene.get('TestRoom').currentRoom }));
         }
         else if (id === 'upload')
         {
@@ -394,7 +418,7 @@ export class Overlay extends Scene
                 () => this.saveMessage.setText(menuText.messages.badFile)
             );
         }
-        // 'profile' and 'bag' do nothing yet.
+        // 'profile', 'bag' and 'settings' do nothing yet.
     }
 
     // Starts the room again from the beginning with the loaded save file.
