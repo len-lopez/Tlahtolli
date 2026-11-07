@@ -6,6 +6,7 @@ import items from '../../data/items.json';
 import { createSave, downloadSave, pickSaveFile } from '../save.js';
 import { nahuatl, english, hasGloss, getAuxLanguage, setAuxLanguage } from '../language.js';
 import { MAX_LIFE } from './TestRoom.js';
+import { savedProgress } from '../progress.js';
 
 const SLOT_KEYS = [ 'q', 'w', 'e' ];
 
@@ -1102,14 +1103,16 @@ export class Overlay extends Scene
         else if (id === 'download')
         {
             // The save file remembers which room the player is in, how many life points are left,
-            // how many cacao beans the player has, what's in the bag, and the settings.
+            // how many cacao beans the player has, what's in the bag, the settings,
+            // and how often each word was answered right and wrong.
             const room = this.scene.get('TestRoom');
             downloadSave(createSave({
                 room: room.currentRoom,
                 life: room.life,
                 beans: room.beans,
                 bag: room.bag,
-                settings: { auxLanguage: getAuxLanguage(this) }
+                settings: { auxLanguage: getAuxLanguage(this) },
+                wordStats: savedProgress(room.progress)
             }));
         }
         else if (id === 'upload')
@@ -1479,10 +1482,13 @@ export class Overlay extends Scene
         this.minigame.spelled.setVisible(false);
         this.showFishWord(this.minigame.entry);
 
+        // The word that was asked, so the room can count the answer.
+        const word = this.minigame.entry.word;
+
         if (success)
         {
             this.closeMinigame();
-            this.scene.get('TestRoom').fishingResult(true);
+            this.scene.get('TestRoom').fishingResult(true, word);
             return;
         }
 
@@ -1502,7 +1508,7 @@ export class Overlay extends Scene
         }));
 
         // The line is pulled in right away and the fish gets away.
-        this.scene.get('TestRoom').fishingResult(false);
+        this.scene.get('TestRoom').fishingResult(false, word);
     }
 
     // All three boxes shake quickly left and right: "that was wrong".
