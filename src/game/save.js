@@ -3,18 +3,22 @@
 
 // Goes up by one whenever the contents of a save file change,
 // so that older save files can still be read later.
-const SAVE_VERSION = 1;
+// Version 1: room only. Version 2: room and life points.
+const SAVE_VERSION = 2;
 
 // Makes the contents of a new save file.
-// state = what the game wants to remember. For now: { room } = the room the player is in
-// (0 = room 1, 1 = room 2). More things (beans, bag, words, ...) will be added here later.
+// state = what the game wants to remember:
+//   room = the room the player is in (0 = room 1, 1 = room 2)
+//   life = how many life points (Yollotl) the player has left
+// More things (beans, bag, words, ...) will be added here later.
 export function createSave (state)
 {
     return {
         game: 'tlahtolli',
         version: SAVE_VERSION,
         savedAt: new Date().toISOString(),
-        room: state.room
+        room: state.room,
+        life: state.life
     };
 }
 

@@ -3,6 +3,7 @@ import wordList from '../../data/wordlist.json';
 import fishingWords from '../../data/fishing-words.json';
 import menuText from '../../data/menu.json';
 import { createSave, downloadSave, pickSaveFile } from '../save.js';
+import { MAX_LIFE } from './TestRoom.js';
 
 const SLOT_KEYS = [ 'q', 'w', 'e' ];
 
@@ -67,6 +68,13 @@ const TEXT_STYLE = {
     fontSize: 12,
     color: '#ffffff'
 };
+
+// Life points (Yollotl) in the top left corner: small red squares.
+const LIFE_SQUARE = 8;      // size of one square in pixels
+const LIFE_GAP = 3;         // space between two squares
+const LIFE_LEFT = 8;        // distance from the left edge of the screen
+const LIFE_TOP = 8;         // distance from the top edge of the screen
+const COLOR_LIFE = 0xd62828;
 
 // Width of the menu panel (it sits in the middle of the screen).
 const MENU_WIDTH = 200;
@@ -139,6 +147,26 @@ export class Overlay extends Scene
 
             this.slots[letter] = { word: null, circle, letterLabel: label, wordLabel };
         });
+
+        // --- Life points (Yollotl) in the top left corner ---
+        // One red square per life point, side by side.
+        // The room knows how many life points there are (3 when full).
+        this.lifeSquares = [];
+        for (let i = 0; i < MAX_LIFE; i++)
+        {
+            const square = this.add.rectangle(
+                LIFE_LEFT + i * (LIFE_SQUARE + LIFE_GAP), LIFE_TOP,
+                LIFE_SQUARE, LIFE_SQUARE, COLOR_LIFE
+            ).setOrigin(0, 0);
+            this.lifeSquares.push(square);
+        }
+
+        // The word underneath the squares (from src/data/menu.json).
+        this.add.text(LIFE_LEFT, LIFE_TOP + LIFE_SQUARE + 3, menuText.hud.life, TEXT_STYLE);
+
+        // Show as many squares as the player has life points right now
+        // (after loading a save file this can be fewer than 3).
+        this.showLife(this.scene.get('TestRoom').life);
 
         // --- Enter key symbol in the bottom right corner ---
         const enterX = w - 20;
@@ -482,8 +510,9 @@ export class Overlay extends Scene
         }
         else if (id === 'download')
         {
-            // The save file remembers which room the player is in.
-            downloadSave(createSave({ room: this.scene.get('TestRoom').currentRoom }));
+            // The save file remembers which room the player is in and how many life points are left.
+            const room = this.scene.get('TestRoom');
+            downloadSave(createSave({ room: room.currentRoom, life: room.life }));
         }
         else if (id === 'upload')
         {
@@ -901,6 +930,15 @@ export class Overlay extends Scene
             // Time's up: the fish gets away.
             this.finishMinigame(false);
         }
+    }
+
+    // ---------- Life points ----------
+
+    // Shows one red square per life point. Lost life points disappear.
+    // Called by the room whenever the life points change.
+    showLife (life)
+    {
+        this.lifeSquares.forEach((square, i) => square.setVisible(i < life));
     }
 
     // ---------- Slots ----------
