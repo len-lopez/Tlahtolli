@@ -186,6 +186,15 @@ const BEAN_COUNT_STEP = 700;   // milliseconds between two beans
 const BEAN_HOP_TIME = 400;     // how long one bean takes to fly over, in milliseconds
 const BEAN_HOP_HEIGHT = 12;    // how high it flies (his hand), in pixels above the mat
 
+// --- The cloth buyer's task ---
+// When you accept, every other merchant names a price for a piece of cloth:
+// a random number from CLOTH_PRICE_MIN to CLOTH_PRICE_MAX (picked once, when the task starts).
+const CLOTH_PRICE_MIN = 20;
+const CLOTH_PRICE_MAX = 400;
+
+// The bean counter counts from 1 up to this number (the number list goes further).
+const COUNT_ALOUD_TO = 20;
+
 // --- The leader's counting task ---
 // How many cacao beans the leader pays for each right answer.
 const COUNTING_PAY = 5;
@@ -1062,6 +1071,13 @@ export class TestRoom extends Scene
                 return;
             }
 
+            // While the cloth task is running, the other merchants let you choose what to ask.
+            if (this.clothQuest && npc.clothPrice !== undefined)
+            {
+                this.talkDuringClothQuest(overlay, npc);
+                return;
+            }
+
             if (npc.type === 'beanCounter')
             {
                 this.countAloud(overlay, 0);
@@ -1093,7 +1109,7 @@ export class TestRoom extends Scene
     countAloud (overlay, i)
     {
         const entry = numberWords[i];
-        const isLast = i === numberWords.length - 1;
+        const isLast = entry.number >= COUNT_ALOUD_TO || i === numberWords.length - 1;
         const next = isLast ? null : () => this.countAloud(overlay, i + 1);
 
         const digit = entry.number + ' · ';
@@ -1102,22 +1118,71 @@ export class TestRoom extends Scene
 
     // The cloth buyer says he wants to buy cloth, then asks: if you ask around the other
     // merchants and find him the best price, he'll pay you a commission. Will you?
-    // Yes or no: for now, both just close the box.
+    // Yes: the task starts (see startClothQuest). No: the box just closes.
+    // While the task is running, he only says that he wants to buy cloth.
     talkToClothBuyer (overlay)
     {
         const text = npcText.clothBuyer;
+
+        if (this.clothQuest)
+        {
+            overlay.openDialogue(text.line);
+            return;
+        }
+
         overlay.openDialogue(text.line, () => {
-            overlay.openQuestion(text.request, () => {}, () => {});
+            overlay.openQuestion(text.request, () => this.startClothQuest(), () => {});
         });
     }
 
-    // Forgets everything about the leader's counting task (when leaving the Marketplace).
+    // Starts the cloth task: every merchant except the cloth buyer picks a price.
+    // The task runs until you leave the Marketplace (see resetMarketTask).
+    startClothQuest ()
+    {
+        this.npcs.forEach((npc) => {
+            if (npcText[npc.type].sells && npc.type !== 'clothBuyer')
+            {
+                npc.clothPrice = randomBetween(CLOTH_PRICE_MIN, CLOTH_PRICE_MAX);
+            }
+        });
+        this.clothQuest = true;
+    }
+
+    // Talking to a merchant while the cloth task is running: you choose what to say.
+    // Everyone: "How much for a piece of cloth?" The bean counter also: "Can you count for me?"
+    // (his counting from 1 to 20). w leaves without asking anything.
+    talkDuringClothQuest (overlay, npc)
+    {
+        const options = [
+            { label: menuText.options.clothPrice, action: () => this.sayClothPrice(overlay, npc) }
+        ];
+        if (npc.type === 'beanCounter')
+        {
+            options.push({ label: menuText.options.countForMe, action: () => this.countAloud(overlay, 0) });
+        }
+        overlay.openOptions(options);
+    }
+
+    // The merchant says his price for a piece of cloth, as a number word
+    // (from src/data/numbers.json), e.g. "Ompohualli omome." (gloss: "Forty-two.").
+    sayClothPrice (overlay, npc)
+    {
+        const entry = numberWords.find((e) => e.number === npc.clothPrice);
+        overlay.openDialogue({ nah: entry.word + '.', en: entry.meaning + '.' });
+    }
+
+    // Forgets everything about the Marketplace tasks (when leaving the Marketplace):
+    // the leader's counting task and the cloth buyer's task.
     resetMarketTask ()
     {
         this.marketQuest = null;
         this.marketDone = [];
         this.marketWrong = 0;
         this.leaderAngry = false;
+
+        // The cloth buyer's task too: it stops, and the merchants forget their prices.
+        this.clothQuest = false;
+        (this.npcs ?? []).forEach((npc) => { delete npc.clothPrice; });
     }
 
     // Talking to the marketplace leader (the counting task).

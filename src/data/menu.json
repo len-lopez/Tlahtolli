@@ -28,6 +28,10 @@
         "pull": { "nah": "Quixtia", "en": "Pull" },
         "no": { "nah": "Ahmo", "en": "No" }
     },
+    "options": {
+        "clothPrice": { "nah": "(demo) How much for a piece of cloth?", "en": "How much for a piece of cloth?" },
+        "countForMe": { "nah": "(demo) Can you count for me?", "en": "Can you count for me?" }
+    },
     "hud": {
         "life": { "nah": "Yollotl", "en": "Life" }
     },
