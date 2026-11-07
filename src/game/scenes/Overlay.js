@@ -322,8 +322,12 @@ export class Overlay extends Scene
         }
         else if (slot.word === null)
         {
-            // q/w/e on an empty slot opens the text prompt.
-            this.openPrompt(letter);
+            // q/w/e on an empty slot opens the text prompt
+            // (but not while sleeping: then nothing happens).
+            if (!this.isSleeping())
+            {
+                this.openPrompt(letter);
+            }
         }
         else
         {
