@@ -14,7 +14,8 @@
         "menu": "menu",
         "confirm": "confirm",
         "back": "back",
-        "close": "close"
+        "close": "close",
+        "cancel": "cancel"
     },
     "messages": {
         "badFile": "This file is not a Tlahtolli save file."

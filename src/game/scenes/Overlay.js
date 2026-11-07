@@ -229,9 +229,20 @@ export class Overlay extends Scene
             return;
         }
 
-        if (this.mode === 'fishing' || this.mode === 'reveal')
+        if (this.mode === 'fishing')
         {
-            // Line is out: q/w/e powers and the menu can't be used.
+            // Line is out: q/w/e powers and the menu can't be used,
+            // but Enter pulls the line in early (cancel).
+            if (event.key === 'Enter')
+            {
+                this.scene.get('TestRoom').stopFishing();
+            }
+            return;
+        }
+
+        if (this.mode === 'reveal')
+        {
+            // After a failed catch: q/w/e powers and the menu stay locked for a moment.
             return;
         }
 
@@ -805,14 +816,16 @@ export class Overlay extends Scene
 
     // Called every frame: runs the minigame timer.
     // The word next to the Enter symbol, depending on what the player is doing:
-    // walking around = "menu", typing a word = "confirm", menu open = "close".
-    // While fishing Enter does nothing, so there's no word then.
+    // walking around = "menu", typing a word = "confirm", menu open = "close",
+    // line out = "cancel". Otherwise (fish biting, after a failed catch)
+    // Enter does nothing, so there's no word then.
     updateEnterLabel ()
     {
         const words = {
             play: menuText.buttons.menu,
             prompt: menuText.buttons.confirm,
-            menu: menuText.buttons.close
+            menu: menuText.buttons.close,
+            fishing: menuText.buttons.cancel
         };
         const word = words[this.mode] ?? '';
 
