@@ -1268,29 +1268,27 @@ export class TestRoom extends Scene
     }
 
     // The cloth buyer asks which one is the lowest price you found; when the box is closed,
-    // the number minigame starts (like the leader's: order, choice, or typing), with the
-    // lowest of all the merchants' prices as the right answer.
+    // you enter it IN DIGITS (see openDigits in the overlay): so you have to really understand
+    // the number words the merchants said. Giving up with w counts as a wrong answer.
     reportLowestPrice (overlay)
     {
         const prices = this.npcs.filter((npc) => npc.clothPrice !== undefined).map((npc) => npc.clothPrice);
         const lowest = Math.min(...prices);
 
         overlay.openDialogue(npcText.clothBuyer.whichLowest, () => {
-            overlay.startNumberGame(
-                lowest,
-                (success, word) => this.clothReportResult(overlay, success, word),
-                () => this.afterWrongReport(overlay)
-            );
+            overlay.openDigits((number) => this.clothReportResult(overlay, lowest, number === lowest));
         });
     }
 
-    // The player answered the cloth buyer (success = right or wrong).
+    // The player answered the cloth buyer (success = the right number, false = wrong or gave up).
     // Right: he pays the commission, and the task is done (for this visit).
-    // Wrong: one more wrong answer; after CLOTH_MAX_WRONG he gives up (also done for this visit).
-    // (What he says after a wrong answer comes in afterWrongReport, once the boxes are gone.)
-    clothReportResult (overlay, success, word)
+    // Wrong: "That doesn't sound right, check again". After CLOTH_MAX_WRONG wrong answers
+    // he gives up ("maybe I'll look for cloth another day"); that's also done for this visit.
+    // lowest = the right price; its number word counts as answered right or wrong.
+    clothReportResult (overlay, lowest, success)
     {
-        // Count the answer for this word (for this session and for the save file).
+        const text = npcText.clothBuyer;
+        const word = numberWords.find((e) => e.number === lowest).word;
         recordAnswer(this.progress, word, success);
 
         if (success)
@@ -1298,7 +1296,7 @@ export class TestRoom extends Scene
             this.endClothQuest(false);
             this.beans += CLOTH_COMMISSION;
             overlay.showBeans(this.beans);
-            overlay.openDialogue(npcText.clothBuyer.paid);
+            overlay.openDialogue(text.paid);
             return;
         }
 
@@ -1306,15 +1304,10 @@ export class TestRoom extends Scene
         if (this.clothWrong >= CLOTH_MAX_WRONG)
         {
             this.endClothQuest(true);
+            overlay.openDialogue(text.anotherDay);
+            return;
         }
-    }
-
-    // After a wrong report, once the boxes are gone: "That doesn't sound right, check again",
-    // or, if he gave up, "maybe I'll look for cloth another day".
-    afterWrongReport (overlay)
-    {
-        const text = npcText.clothBuyer;
-        overlay.openDialogue(this.clothGaveUp ? text.anotherDay : text.checkAgain);
+        overlay.openDialogue(text.checkAgain);
     }
 
     // Ends the cloth task for this visit: the merchants forget their prices
@@ -2289,10 +2282,11 @@ export class TestRoom extends Scene
             // While an NPC is talking (dialogue box open) you can't walk away.
             this.player.body.setVelocityX(0);
         }
-        else if (this.scene.get('Overlay').minigame && this.scene.get('Overlay').minigame.lockWalking)
+        else if ((this.scene.get('Overlay').minigame && this.scene.get('Overlay').minigame.lockWalking)
+            || this.scene.get('Overlay').mode === 'digits')
         {
-            // While answering the leader's "how many?" (and right after a wrong answer)
-            // you can't walk away either.
+            // While answering the leader's "how many?" (and right after a wrong answer),
+            // or entering the lowest price for the cloth buyer, you can't walk away either.
             this.player.body.setVelocityX(0);
         }
         else if (this.cursors.left.isDown)
