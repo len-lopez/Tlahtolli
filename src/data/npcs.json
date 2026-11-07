@@ -1,4 +1,10 @@
 {
-    "merchant": { "line": "Nipochtecatl." },
-    "judge": { "line": "Tianquizpan nitlayacanqui" }
+    "merchant": {
+        "line": "Nipochtecatl.",
+        "inspect": "Ca pochtecatl."
+    },
+    "judge": {
+        "line": "Tianquizpan nitlayacanqui",
+        "inspect": "Ca tianquizpan tlayacanqui."
+    }
 }

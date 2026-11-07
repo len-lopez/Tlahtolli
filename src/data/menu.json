@@ -8,7 +8,7 @@
         { "id": "save", "label": "Save" }
     ],
     "map": [
-        { "room": 1, "label": "Empty Room" },
+        { "room": 1, "label": "Home" },
         { "room": 2, "label": "Lake of Colors" },
         { "room": 0, "label": "Marketplace" }
     ],
@@ -27,6 +27,7 @@
         "life": "Yollotl"
     },
     "messages": {
-        "badFile": "This file is not a Tlahtolli save file."
+        "badFile": "This file is not a Tlahtolli save file.",
+        "nothingToInspect": "(Placeholder) There is nothing to inspect here."
     }
 }

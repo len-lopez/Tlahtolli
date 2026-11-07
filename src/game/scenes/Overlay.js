@@ -660,7 +660,7 @@ export class Overlay extends Scene
     }
 
     // For testing: closes the menu and puts the player into a room right away.
-    // room = the room's number (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors).
+    // room = the room's number (0 = Marketplace, 1 = Home, 2 = Lake of Colors).
     teleport (room)
     {
         this.closeMenu();

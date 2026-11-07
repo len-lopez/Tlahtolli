@@ -11,7 +11,7 @@ const SAVE_VERSION = 4;
 
 // Makes the contents of a new save file.
 // state = what the game wants to remember:
-//   room  = the room the player is in (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors)
+//   room  = the room the player is in (0 = Marketplace, 1 = Home, 2 = Lake of Colors)
 //   life  = how many life points (Yollotl) the player has left
 //   beans = how many cacao beans the player has
 //   bag   = how many of each item is in the bag, e.g. { michin: 3 }
