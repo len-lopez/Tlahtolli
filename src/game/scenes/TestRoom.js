@@ -101,34 +101,43 @@ const MARKET_NPCS = [
 ];
 const COLOR_NPC = 0x9b5de5;
 
-// --- Lake of Colors: flower plants (to look at and inspect with Itta; you walk through them) ---
-// col  = the tile column, counted from the Lake's left edge (the water starts at column 16).
-// type = which plant it is; its Itta text is in src/data/plants.json under that name.
-// stem = how tall the green stem is, in pixels.
-// leaves = where the leaves sit: how far up the stem (pixels) and to which side (-1 left, 1 right).
-// flowers = where each flower sits: x = left/right of the stem, y = up from the top of the stem.
+// --- Lake of Colors: flowering bushes and trees (to look at and inspect with Itta; you walk through them) ---
+// col   = the tile column of the plant's middle, counted from the Lake's left edge
+//         (the water starts at column 16).
+// type  = which plant it is; its Itta text is in src/data/plants.json under that name.
+// trunk = width and height of the brown trunk, in pixels, or null for a bush (no trunk).
+// crown = width and height of the green leafy part, in pixels. It sits on top of the trunk
+//         (or right on the ground, for a bush).
+// flowers = where each flower sits on the crown: x = left/right of the crown's middle,
+//         y = up/down from the crown's middle (minus = up), in pixels.
 const LAKE_PLANTS = [
     {
-        col: 7, type: 'redFlower', color: 0xd62828, stem: 18,
-        leaves: [ { up: 6, side: -1 }, { up: 10, side: 1 } ],
-        flowers: [ { x: 0, y: 0 }, { x: -5, y: -6 }, { x: 5, y: -4 } ]
+        // A flowering tree with a round-ish crown
+        col: 2, type: 'redFlower', color: 0xd62828,
+        trunk: { width: 6, height: 28 },
+        crown: { width: 42, height: 32 },
+        flowers: [ { x: -14, y: -9 }, { x: 2, y: -11 }, { x: 13, y: -4 }, { x: -6, y: 1 },
+                   { x: 8, y: 8 }, { x: -15, y: 8 }, { x: 16, y: 10 } ]
     },
     {
-        col: 10, type: 'whiteFlower', color: 0xffffff, stem: 12,
-        leaves: [ { up: 4, side: 1 } ],
-        flowers: [ { x: -3, y: 0 }, { x: 3, y: 0 } ]
+        // A wide, low bush standing right on the ground
+        col: 7, type: 'whiteFlower', color: 0xffffff,
+        trunk: null,
+        crown: { width: 48, height: 24 },
+        flowers: [ { x: -18, y: -6 }, { x: -7, y: -8 }, { x: 5, y: -5 }, { x: 17, y: -7 },
+                   { x: -12, y: 4 }, { x: 0, y: 3 }, { x: 13, y: 5 } ]
     },
     {
-        col: 13, type: 'yellowFlower', color: 0xf2c418, stem: 24,
-        leaves: [ { up: 5, side: -1 }, { up: 9, side: 1 }, { up: 14, side: -1 } ],
-        flowers: [ { x: 0, y: 0 } ]
+        // A tall, narrow tree
+        col: 12, type: 'yellowFlower', color: 0xf2c418,
+        trunk: { width: 4, height: 40 },
+        crown: { width: 26, height: 44 },
+        flowers: [ { x: -6, y: -17 }, { x: 6, y: -10 }, { x: -7, y: -2 }, { x: 5, y: 6 },
+                   { x: -4, y: 14 } ]
     }
 ];
-const COLOR_STEM = 0x2d6a4f;
-const STEM_WIDTH = 2;
-const LEAF_WIDTH = 5;
-const LEAF_HEIGHT = 3;
-const FLOWER_SIZE = 5;
+const COLOR_LEAVES = 0x2d6a4f;
+const FLOWER_SIZE = 6;
 
 // --- Talking (Ihtoa) ---
 // How long the speech animation lasts, in milliseconds.
@@ -634,8 +643,9 @@ export class TestRoom extends Scene
         });
     }
 
-    // Puts the flower plants (LAKE_PLANTS) on the ground of the Lake of Colors.
-    // Each plant is a few rectangles: a green stem, small green leaves, and colored flowers on top.
+    // Puts the flowering bushes and trees (LAKE_PLANTS) on the ground of the Lake of Colors.
+    // Each one is a few rectangles: a brown trunk (trees only), a big green crown,
+    // and colored flowers on the crown.
     // They're drawn behind the player and aren't solid. Remembered in this.plants for Itta.
     decorateLake ()
     {
@@ -644,28 +654,28 @@ export class TestRoom extends Scene
 
         this.plants = LAKE_PLANTS.map((plant) => {
             const x = left + plant.col * TILE + TILE / 2; // middle of the plant
-            const stemTop = ground - plant.stem;
 
-            // Stem
-            this.add.rectangle(x, ground - plant.stem / 2, STEM_WIDTH, plant.stem, COLOR_STEM)
+            // Trunk (trees only), standing on the ground
+            const trunkHeight = plant.trunk ? plant.trunk.height : 0;
+            if (plant.trunk)
+            {
+                this.add.rectangle(x, ground - trunkHeight / 2, plant.trunk.width, trunkHeight, COLOR_TRUNK)
+                    .setDepth(-1);
+            }
+
+            // Crown, on top of the trunk (or on the ground)
+            const crownMiddleY = ground - trunkHeight - plant.crown.height / 2;
+            this.add.rectangle(x, crownMiddleY, plant.crown.width, plant.crown.height, COLOR_LEAVES)
                 .setDepth(-1);
 
-            // Leaves, sticking out to the left or right of the stem
-            plant.leaves.forEach((leaf) => {
-                this.add.rectangle(x + leaf.side * (LEAF_WIDTH / 2 + 1), ground - leaf.up,
-                    LEAF_WIDTH, LEAF_HEIGHT, COLOR_STEM)
-                    .setDepth(-1);
-            });
-
-            // Flowers
+            // Flowers on the crown
             plant.flowers.forEach((flower) => {
-                this.add.rectangle(x + flower.x, stemTop + flower.y, FLOWER_SIZE, FLOWER_SIZE, plant.color)
+                this.add.rectangle(x + flower.x, crownMiddleY + flower.y, FLOWER_SIZE, FLOWER_SIZE, plant.color)
                     .setDepth(-1);
             });
 
-            // For Itta: where the plant stands, and how wide it is (the widest flower spread).
-            const spread = Math.max(...plant.flowers.map((f) => Math.abs(f.x))) + FLOWER_SIZE / 2;
-            return { x, width: spread * 2, bottom: ground, type: plant.type };
+            // For Itta: where the plant stands, and how wide it is (the crown's width).
+            return { x, width: plant.crown.width, bottom: ground, type: plant.type };
         });
     }
 
