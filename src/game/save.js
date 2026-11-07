@@ -8,7 +8,8 @@
 // (the game converts older save files by itself, see "Start room" in TestRoom.js).
 // Version 4: also cacao beans and the bag.
 // Version 5: also the settings (for now only the auxiliary language).
-const SAVE_VERSION = 5;
+// Version 6: also how often each word was answered right and wrong (see progress.js).
+const SAVE_VERSION = 6;
 
 // Makes the contents of a new save file.
 // state = what the game wants to remember:
@@ -17,6 +18,8 @@ const SAVE_VERSION = 5;
 //   beans = how many cacao beans the player has
 //   bag   = how many of each item is in the bag, e.g. { michin: 3 }
 //   settings = what is chosen in Settings, e.g. { auxLanguage: 'en' } (null = none)
+//   wordStats = how often each word was answered right and wrong,
+//               e.g. { Chichiltic: { right: 3, wrong: 1 } } (see progress.js)
 // More things (words, ...) will be added here later.
 export function createSave (state)
 {
@@ -29,7 +32,8 @@ export function createSave (state)
         beans: state.beans,
         // A copy of the bag, so the save file holds the numbers from this moment.
         bag: { ...state.bag },
-        settings: { ...state.settings }
+        settings: { ...state.settings },
+        wordStats: state.wordStats
     };
 }
 

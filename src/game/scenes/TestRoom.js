@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
 import plantText from '../../data/plants.json';
+import { createProgress, recordAnswer } from '../progress.js';
 
 // Size of one tile in pixels. Tiled maps will use the same size later.
 const TILE = 16;
@@ -522,6 +523,12 @@ export class TestRoom extends Scene
                 }
             });
         }
+
+        // --- Word progress ---
+        // How often each word was answered right and wrong (see src/game/progress.js).
+        // After loading a save file, the saved counts are used; a new game (or an older
+        // save file without them) starts with none. The session counts always start at zero.
+        this.progress = createProgress(data && data.save ? data.save.wordStats : null);
 
         // Keyboard: arrow keys for walking.
         // (Q, W, E and Enter are handled in the overlay.)
@@ -1181,12 +1188,16 @@ export class TestRoom extends Scene
 
     // Called by the overlay when the minigame is over.
     // success = true: the fish is caught. false: wrong button or time ran out.
-    fishingResult (success)
+    // word = the fishing word that was asked (e.g. "Chichiltic").
+    fishingResult (success, word)
     {
         if (!this.fishing || !this.fishing.hookedFish)
         {
             return;
         }
+
+        // Count the answer for this word (for this session and for the save file).
+        recordAnswer(this.progress, word, success);
 
         // Remember how this catch went; it changes which color is likely to bite next.
         this.lastCatch = {
