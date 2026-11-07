@@ -39,9 +39,56 @@ function buildWaterRoomGrid ()
     return grid;
 }
 
+// --- Marketplace ---
+// Twice as wide as the screen (64 tiles).
+// Right half: flat ground, like the other rooms.
+// Left half: a staircase going up towards the left, to a flat plateau at the far left.
+// The plateau's top is 12 tiles above the bottom of the screen (2/3 of the 18-tile screen),
+// that is 7 tiles higher than the normal ground.
+const MARKET_WIDTH = ROOM_WIDTH * 2;
+const PLATEAU_WIDTH = 10;   // the plateau: the first 10 tiles from the left
+const PLATEAU_HEIGHT = 7;   // how many tiles higher than the normal ground
+const STEP_WIDTH = 3;       // each step of the staircase is 3 tiles wide and 1 tile high
+
+// How many tiles higher than the normal ground the Marketplace is in this column.
+// Plateau = 7, then the steps 6, 5, 4, 3, 2, 1 (each 3 tiles wide), then 0 = normal ground.
+function marketGroundHeight (col)
+{
+    if (col < PLATEAU_WIDTH)
+    {
+        return PLATEAU_HEIGHT;
+    }
+    const step = Math.floor((col - PLATEAU_WIDTH) / STEP_WIDTH) + 1;
+    return Math.max(PLATEAU_HEIGHT - step, 0);
+}
+
+function buildMarketplaceGrid ()
+{
+    const grid = [];
+    for (let row = 0; row < ROOM_HEIGHT; row++)
+    {
+        const line = [];
+        for (let col = 0; col < MARKET_WIDTH; col++)
+        {
+            // Ground goes from the bottom of the screen up to the ground height of this column.
+            const groundTopRow = ROOM_HEIGHT - FLOOR_ROWS - marketGroundHeight(col);
+            line.push(row >= groundTopRow ? FLOOR : EMPTY);
+        }
+        grid.push(line);
+    }
+    return grid;
+}
+
+// NPCs (people to talk to later) in the Marketplace: placeholder boxes,
+// the same size as the player (12 x 24) but purple.
+// col = the tile column they stand on, counted from the Marketplace's left edge.
+// 5 standing around in the right half, 1 on the plateau.
+const MARKET_NPCS = [ 5, 36, 41, 47, 52, 58 ];
+const COLOR_NPC = 0x9b5de5;
+
 // All rooms, from left to right. The number in front is the room's place in this list.
 const ROOMS = [
-    buildRoomGrid(),     // 0 = Marketplace (empty for now)
+    buildMarketplaceGrid(), // 0 = Marketplace
     buildRoomGrid(),     // 1 = Empty Room (where the game starts)
     buildWaterRoomGrid() // 2 = Lake of Colors: right half is water
 ];
@@ -103,6 +150,39 @@ function randomBetween (min, max)
     return Math.floor(min + Math.random() * (max - min + 1));
 }
 
+// Rooms can have different widths now (the Marketplace is two screens wide).
+// These two helpers work out where each room is.
+
+// The left edge of a room, in pixels from the left edge of the whole map.
+function roomLeft (room)
+{
+    let left = 0;
+    for (let i = 0; i < room; i++)
+    {
+        left += ROOMS[i][0].length * TILE;
+    }
+    return left;
+}
+
+// The width of a room, in pixels.
+function roomWidth (room)
+{
+    return ROOMS[room][0].length * TILE;
+}
+
+// Which room a spot on the map (x, in pixels) is in.
+function roomAt (x)
+{
+    for (let room = 0; room < ROOMS.length; room++)
+    {
+        if (x < roomLeft(room) + roomWidth(room))
+        {
+            return room;
+        }
+    }
+    return ROOMS.length - 1;
+}
+
 // Puts the rooms side by side into one big grid,
 // so the player can walk from one room into the next.
 function joinRoomsSideBySide (rooms)
@@ -154,11 +234,20 @@ export class TestRoom extends Scene
         // Only floor tiles are solid. Water is not something you can stand on.
         floor.setCollision([ FLOOR ]);
 
+        // Remembered, to look up where the ground is (see groundTopAt).
+        this.grid = grid;
+
+        // --- NPCs in the Marketplace: purple boxes standing on the ground ---
+        MARKET_NPCS.forEach((col) => {
+            const x = roomLeft(0) + col * TILE + TILE / 2;
+            this.add.rectangle(x, this.groundTopAt(x) - 12, 12, 24, COLOR_NPC);
+        });
+
         // The player: a small green rectangle (12 x 24 pixels).
         // It starts 4 tiles from the left edge of the start room (the Empty Room).
         const floorTop = (ROOM_HEIGHT - FLOOR_ROWS) * TILE;
-        const roomPixelWidth = ROOM_WIDTH * TILE;
-        this.player = this.add.rectangle(START_ROOM * roomPixelWidth + 4 * TILE, floorTop - 12, 12, 24, 0x2ecc71);
+        const start = this.roomSpawn(START_ROOM);
+        this.player = this.add.rectangle(start.x, start.y, 12, 24, 0x2ecc71);
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
 
@@ -216,7 +305,7 @@ export class TestRoom extends Scene
         };
 
         // Which room the water is in (its number in the ROOMS list, so 2 = Lake of Colors).
-        this.waterRoom = Math.floor(waterLeft / roomPixelWidth);
+        this.waterRoom = roomAt(waterLeft);
 
         // No fish at the start: they are made every time you walk into the water room.
         this.fishes = [];
@@ -230,7 +319,7 @@ export class TestRoom extends Scene
         // --- Start room ---
         // A new game starts in the Empty Room.
         // After loading a save file, the player starts in the saved room instead,
-        // at the same spot (4 tiles from the room's left edge).
+        // 4 tiles from the room's left edge, standing on the ground there.
         // A save file without a room, or with a room that doesn't exist, starts in the Empty Room.
         let startRoom = START_ROOM;
         if (data && data.save)
@@ -248,14 +337,22 @@ export class TestRoom extends Scene
             if (Number.isInteger(savedRoom) && savedRoom >= 0 && savedRoom < ROOMS.length)
             {
                 startRoom = savedRoom;
-                this.player.body.reset(startRoom * roomPixelWidth + 4 * TILE, floorTop - 12);
+                const spot = this.roomSpawn(startRoom);
+                this.player.body.reset(spot.x, spot.y);
             }
         }
 
+        // --- Camera ---
+        // The camera follows the player, but never shows anything outside the room
+        // the player is in. In rooms that are one screen wide it stands still, like before;
+        // in wider rooms (the Marketplace) it scrolls along as the player walks.
+        // true = round to whole pixels, so the pixel art stays sharp.
+        this.cameras.main.startFollow(this.player, true);
+
         // The room the player is in right now (its number in the ROOMS list).
-        // The camera shows that room right away, and if it's the Lake, the fish are made.
+        // The camera is kept inside that room, and if it's the Lake, the fish are made.
         this.currentRoom = startRoom;
-        this.cameras.main.setScroll(startRoom * roomPixelWidth, 0);
+        this.keepCameraInRoom(startRoom);
         if (startRoom === this.waterRoom)
         {
             this.spawnFishes();
@@ -263,8 +360,8 @@ export class TestRoom extends Scene
 
         // Where the player wakes up after blacking out: the Empty Room,
         // at the same spot where the game starts.
-        this.blackoutX = START_ROOM * roomPixelWidth + 4 * TILE;
-        this.blackoutY = floorTop - 12;
+        this.blackoutX = start.x;
+        this.blackoutY = start.y;
 
         // --- Life points (Yollotl) ---
         // A new game starts with full life.
@@ -359,7 +456,7 @@ export class TestRoom extends Scene
     }
 
     // For testing (from the Map in the menu): puts the player into another room,
-    // 4 tiles from its left edge, standing on the floor (the same spot as at the start).
+    // 4 tiles from its left edge, standing on the ground there.
     // The camera and the fish follow by themselves in the next frame (see update).
     goToRoom (room)
     {
@@ -368,7 +465,38 @@ export class TestRoom extends Scene
             return; // no such room
         }
 
-        this.player.body.reset(room * ROOM_WIDTH * TILE + 4 * TILE, this.floorTop - 12);
+        const spot = this.roomSpawn(room);
+        this.player.body.reset(spot.x, spot.y);
+    }
+
+    // Where the player appears when arriving in a room (start, save file, Map):
+    // 4 tiles from the room's left edge, standing on the ground there.
+    // In the Marketplace that's up on the plateau.
+    roomSpawn (room)
+    {
+        const x = roomLeft(room) + 4 * TILE;
+        return { x, y: this.groundTopAt(x) - 12 }; // 12 = half the player's height
+    }
+
+    // The top of the ground at a spot on the map (x, in pixels): the first floor tile
+    // from the top in that column. If there's no floor there, the normal ground height.
+    groundTopAt (x)
+    {
+        const col = Math.floor(x / TILE);
+        for (let row = 0; row < ROOM_HEIGHT; row++)
+        {
+            if (this.grid[row][col] === FLOOR)
+            {
+                return row * TILE;
+            }
+        }
+        return (ROOM_HEIGHT - FLOOR_ROWS) * TILE;
+    }
+
+    // Keeps the camera inside one room: it may follow the player only up to that room's edges.
+    keepCameraInRoom (room)
+    {
+        this.cameras.main.setBounds(roomLeft(room), 0, roomWidth(room), this.mapHeight);
     }
 
     // Puts the eye on the front side of the player, near the top.
@@ -920,16 +1048,15 @@ export class TestRoom extends Scene
             this.fishing.line.lineBetween(tip.x, tip.y, float.x, float.y);
         }
 
-        // Which room is the player in? Each room is one screen wide.
-        const roomPixelWidth = ROOM_WIDTH * TILE;
-        // (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors)
-        const room = Math.floor(this.player.x / roomPixelWidth);
+        // Which room is the player in? (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors)
+        const room = roomAt(this.player.x);
 
-        // When the player walks into another room, the camera jumps there.
+        // When the player walks into another room, the camera jumps there
+        // and from now on stays inside that room.
         if (room !== this.currentRoom)
         {
             this.currentRoom = room;
-            this.cameras.main.setScroll(room * roomPixelWidth, 0);
+            this.keepCameraInRoom(room);
 
             // Fresh fish every time you walk into the water room.
             // Leaving it takes the old fish away.
