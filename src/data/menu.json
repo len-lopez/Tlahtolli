@@ -1,8 +1,8 @@
 {
     "main": [
-        { "id": "profile", "label": { "nah": "Nehhuatl", "en": "Profile" } },
+        { "id": "profile", "label": { "nah": "Noxiptla", "en": "My Character" } },
         { "id": "bag", "label": { "nah": "Noxiquipil", "en": "My Bag" } },
-        { "id": "map", "label": { "nah": "Amatlacuilolli", "en": "Map" } },
+        { "id": "map", "label": { "nah": "Campa?", "en": "Where?" } },
         { "id": "words", "label": { "nah": "Notlahtol", "en": "My Words" } },
         { "id": "settings", "label": { "nah": "Tlatecpantli", "en": "Settings" } },
         { "id": "save", "label": { "nah": "Tlapializtli", "en": "Save" } }
@@ -10,7 +10,7 @@
     "map": [
         { "room": 1, "label": { "nah": "Nochan", "en": "Home" } },
         { "room": 2, "label": { "nah": "Tlapalapan", "en": "Lake of Colors" } },
-        { "room": 0, "label": { "nah": "Tianquiztli", "en": "Marketplace" } }
+        { "room": 0, "label": { "nah": "Tianquizco", "en": "Marketplace" } }
     ],
     "save": [
         { "id": "download", "label": { "nah": "Xiquixti in motlapial", "en": "Download save file" } },
@@ -18,14 +18,15 @@
     ],
     "settings": [
         { "language": "en", "label": { "nah": "English", "en": null } },
-        { "language": null, "label": { "nah": "Amo", "en": "None" } }
+        { "language": null, "label": { "nah": "Ahmo", "en": "None" } }
     ],
     "buttons": {
         "menu": { "nah": "Xictlapo", "en": "Open" },
         "confirm": { "nah": "Quemah", "en": "Yes" },
         "back": { "nah": "Ximocuepa", "en": "Go back" },
         "close": { "nah": "Xictzacua", "en": "Close" },
-        "cancel": { "nah": "Amo", "en": "Cancel" }
+        "cancel": { "nah": "Ahmo", "en": "Cancel" },
+        "no": { "nah": "Ahmo", "en": "No" }
     },
     "hud": {
         "life": { "nah": "Yollotl", "en": "Life" }
@@ -35,10 +36,10 @@
         "sell": { "nah": "Nicnamaca:", "en": "I'm selling:" }
     },
     "messages": {
-        "badFile": { "nah": "Inin amo tlapialli.", "en": "This file is not a Tlahtolli save file." },
+        "badFile": { "nah": "Inin ahmo tlapialli.", "en": "This file is not a Tlahtolli save file." },
         "nothingToInspect": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "nican.", "en": "here." } ] },
-        "notInterested": { "nah": "Amo nicnequi.", "en": "Not interested." },
-        "notEnoughCacao": { "nah": "Amo ixachi in mocacahuauh.", "en": "Not enough cacao." },
+        "notInterested": { "nah": "Ahmo nicnequi.", "en": "Not interested." },
+        "notEnoughCacao": { "nah": "Ahmo ixachi in mocacahuauh.", "en": "Not enough cacao." },
         "boughtOne": { "words": [ { "nah": "Oticcouh", "en": "You bought" }, { "nah": "ce", "en": "one" }, { "slot": "item", "end": "." } ] },
         "boughtMany": { "words": [ { "nah": "Otiquincouh", "en": "You bought" }, { "slot": "count" }, { "slot": "item", "end": "." } ] },
         "soldOne": { "words": [ { "nah": "Oticnamac", "en": "You sold" }, { "nah": "ce", "en": "one" }, { "slot": "item", "end": "." } ] },
