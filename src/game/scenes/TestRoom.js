@@ -661,17 +661,21 @@ export class TestRoom extends Scene
             this.player.body.reset(this.respawnX, this.respawnY);
         }
 
-        if (this.cursors.left.isDown)
+        if (this.fishing)
+        {
+            // While the line is out you can't walk away.
+            // (Enter pulls the line in early; see the overlay.)
+            this.player.body.setVelocityX(0);
+        }
+        else if (this.cursors.left.isDown)
         {
             this.player.body.setVelocityX(-speed);
             this.facing = -1;
-            this.stopFishing(); // walking away takes the line back in
         }
         else if (this.cursors.right.isDown)
         {
             this.player.body.setVelocityX(speed);
             this.facing = 1;
-            this.stopFishing();
         }
         else
         {
