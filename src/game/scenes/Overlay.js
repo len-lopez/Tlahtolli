@@ -438,18 +438,29 @@ export class Overlay extends Scene
 
         // While the NPC asks a yes/no question (see openQuestion), there is also
         // "(w) Ahmo" next to "(q) Quemah", and both circles can be clicked to answer.
+        // In a long dialogue you can leave early (see openDialogue), there is "(w) Xictzacua" instead.
         // (Clicking the words still shows their glosses.)
         const wCircle = this.add.circle(18 + 80, h - 14, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
         const wLetter = this.add.text(18 + 80, h - 14, 'w', TEXT_STYLE).setOrigin(0.5);
         const wLabel = this.add.text(34 + 80, h - 14, '', TEXT_STYLE).setOrigin(0, 0.5);
         this.makeGlossable(wLabel, 'dialogue');
         this.setGlossLabel(wLabel, menuText.buttons.no);
-        this.dialogueNo = [ wCircle, wLetter, wLabel ]; // only shown while a question is asked
+        this.dialogueNo = [ wCircle, wLetter, wLabel ]; // only shown for a question or a long dialogue
+        this.dialogueNoLabel = wLabel;
 
         qCircle.setInteractive({ useHandCursor: true });
         qCircle.on('pointerdown', () => this.answerQuestion(true));
         wCircle.setInteractive({ useHandCursor: true });
-        wCircle.on('pointerdown', () => this.answerQuestion(false));
+        wCircle.on('pointerdown', () => {
+            if (this.dialogueQuestion)
+            {
+                this.answerQuestion(false);
+            }
+            else
+            {
+                this.quitDialogue();
+            }
+        });
 
         this.dialogue.add([ dialogueBox, this.dialogueText.container, advanceBox, advanceSign,
             qCircle, qLetter, qLabel, wCircle, wLetter, wLabel ]);
@@ -457,6 +468,8 @@ export class Overlay extends Scene
         // The question being asked right now: { onYes, onNo }, or null when the box
         // just shows a line (then q, w or the advance symbol simply close it).
         this.dialogueQuestion = null;
+        // True while the box shows a line of a long dialogue that w can leave early.
+        this.dialogueCanQuit = false;
 
         // --- Shop window: buying (Cohua) or selling (Namaca), hidden at the start ---
         // Looks like the menu: the same panel, a list with a blue bar on the chosen line,
@@ -587,6 +600,11 @@ export class Overlay extends Scene
             if (this.dialogueQuestion && (key === 'q' || key === 'w'))
             {
                 this.answerQuestion(key === 'q');
+            }
+            else if (key === 'w' && this.dialogueCanQuit)
+            {
+                // A long dialogue: w leaves it right away (nothing more is said).
+                this.quitDialogue();
             }
             else if (key === 'q' || key === 'w')
             {
@@ -2222,7 +2240,9 @@ export class Overlay extends Scene
     // text = what the NPC says, as { nah: ..., en: ... } (from src/data/npcs.json or menu.json).
     // afterClose (optional) = what should happen when the box is closed,
     // e.g. opening the shop window after the merchant has asked what you want.
-    openDialogue (text, afterClose = null)
+    // canQuit (optional) = true for a line of a long dialogue: then w (or clicking the w circle)
+    // leaves the whole dialogue early, and afterClose does NOT happen. q goes on as usual.
+    openDialogue (text, afterClose = null, canQuit = false)
     {
         this.mode = 'dialogue';
         this.resetGlossTexts('dialogue');
@@ -2232,9 +2252,12 @@ export class Overlay extends Scene
         this.dialogueAfterClose = afterClose;
 
         // A normal line: advance symbol, only "(q) Quemah".
+        // A line of a long dialogue: also "(w) Xictzacua" to leave early.
         this.dialogueQuestion = null;
+        this.dialogueCanQuit = canQuit;
         this.dialogueAdvance.forEach((thing) => thing.setVisible(true));
-        this.dialogueNo.forEach((thing) => thing.setVisible(false));
+        this.dialogueNo.forEach((thing) => thing.setVisible(canQuit));
+        this.setGlossLabel(this.dialogueNoLabel, menuText.buttons.close);
     }
 
     // Like openDialogue, but the NPC asks a yes/no question.
@@ -2246,6 +2269,19 @@ export class Overlay extends Scene
         this.dialogueQuestion = { onYes, onNo };
         this.dialogueAdvance.forEach((thing) => thing.setVisible(false));
         this.dialogueNo.forEach((thing) => thing.setVisible(true));
+        this.setGlossLabel(this.dialogueNoLabel, menuText.buttons.no);
+    }
+
+    // Leaves a long dialogue early (w): closes the box without going on to the next line.
+    quitDialogue ()
+    {
+        if (this.mode !== 'dialogue' || !this.dialogueCanQuit)
+        {
+            return;
+        }
+
+        this.dialogueAfterClose = null;
+        this.closeDialogue();
     }
 
     // The player answered the question: yes = true (q), no = false (w).
