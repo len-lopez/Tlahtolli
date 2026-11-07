@@ -381,7 +381,8 @@ export class Overlay extends Scene
         this.trade.add([ tradePanel, this.tradeHighlight, this.tradeLines, this.tradeMessage.container ]);
 
         // Clicking a hint word shows its gloss.
-        [ [ 'q', menuText.buttons.confirm ], [ 'w', menuText.buttons.back ] ].forEach(([ letter, label ], i) => {
+        // In the shop, w says "Ahmo" (No), as the partner of q "Quemah" (Yes).
+        [ [ 'q', menuText.buttons.confirm ], [ 'w', menuText.buttons.no ] ].forEach(([ letter, label ], i) => {
             const circleX = 18 + i * 80;
             const circle = this.add.circle(circleX, hintY, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
             const letterText = this.add.text(circleX, hintY, letter, TEXT_STYLE).setOrigin(0.5);
