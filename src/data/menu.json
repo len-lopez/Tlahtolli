@@ -43,6 +43,6 @@
         "sold": { "nah": null, "en": "(Placeholder) Sold {count} {item}." },
         "whatToBuy": { "nah": "Tlein ticcohuaznequi?", "en": "What do you want to buy?" },
         "whatToSell": { "words": [ { "nah": "Tle", "en": "What" }, { "nah": "ticnamacaznequi?", "en": "do you want to sell?" } ] },
-        "bagEmpty": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "ipan", "en": "inside" }, { "nah": "moxiquipil.", "en": "my bag." } ] }
+        "bagEmpty": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "ipan", "en": "inside" }, { "nah": "moxiquipil.", "en": "your bag." } ] }
     }
 }
