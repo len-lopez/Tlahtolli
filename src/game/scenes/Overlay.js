@@ -166,9 +166,9 @@ export class Overlay extends Scene
         this.menu.add(closeText);
 
         this.pages = {
-            main: this.makeChoicePage(menuText.main),
+            main: this.makeChoicePage('main', menuText.main),
             words: this.makeWordListPage(),
-            save: this.makeChoicePage(menuText.save)
+            save: this.makeChoicePage('save', menuText.save)
         };
 
         // Message under the save choices, e.g. when an uploaded file isn't a save file.
@@ -283,8 +283,10 @@ export class Overlay extends Scene
     // ---------- Menu ----------
 
     // A menu page with a list of choices, e.g. Profile / Bag / Word List / Save.
+    // name = the page's name ('main' or 'save').
     // items come from src/data/menu.json. The chosen line has a colored bar behind it.
-    makeChoicePage (items)
+    // Every line can also be clicked with the mouse.
+    makeChoicePage (name, items)
     {
         const container = this.add.container(0, 0);
 
@@ -293,7 +295,13 @@ export class Overlay extends Scene
         container.add(highlight);
 
         items.forEach((item, i) => {
-            container.add(this.add.text(LIST_LEFT, LIST_TOP + i * LINE_HEIGHT, item.label, TEXT_STYLE));
+            const line = this.add.text(LIST_LEFT, LIST_TOP + i * LINE_HEIGHT, item.label, TEXT_STYLE);
+
+            // Clickable; the mouse pointer turns into a hand over it.
+            line.setInteractive({ useHandCursor: true });
+            line.on('pointerdown', () => this.clickChoice(name, i));
+
+            container.add(line);
         });
 
         return { container, items, highlight, chosen: 0 };
@@ -394,7 +402,22 @@ export class Overlay extends Scene
         }
     }
 
-    // q was pressed on a menu line. id comes from src/data/menu.json.
+    // A menu line was clicked: mark it and do the same as pressing q on it.
+    clickChoice (pageName, index)
+    {
+        // Only lines on the page that is shown right now count.
+        if (this.mode !== 'menu' || this.page !== pageName)
+        {
+            return;
+        }
+
+        const page = this.pages[pageName];
+        page.chosen = index;
+        this.updateHighlight();
+        this.confirmChoice(page.items[index].id);
+    }
+
+    // q was pressed (or a line clicked) on a menu line. id comes from src/data/menu.json.
     confirmChoice (id)
     {
         if (id === 'words')
