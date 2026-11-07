@@ -166,14 +166,23 @@ const FISHING_REACH = 2;
 const THROW_DISTANCE = 5 * TILE;
 // How fast the float drifts away while you wait, in pixels per second.
 const DRIFT_SPEED = 3;
-// How close (in pixels, left/right) a fish must swim to the float to bite.
-const BITE_DISTANCE = 6;
-// No bites at all until the float has been on the water this long (milliseconds).
+// No fish gets interested until the float has been on the water this long (milliseconds).
 const BITE_WAIT = 2000;
-// How fast a biting fish swims to the float, in pixels per second.
-const BITE_SWIM_SPEED = 40;
-// When a fish swims under the float, the chance that it bites (0.25 = 1 in 4).
-// If it doesn't, it ignores the float until it has swum away and comes back.
+// After BITE_WAIT, one fish gets interested at a random moment within this time (milliseconds).
+// So with 2000 and 1000, a fish starts swimming to the float somewhere between 2 and 3 seconds.
+const INTEREST_WINDOW = 1000;
+// At the latest this long after the float lands, the interested fish bites (milliseconds).
+const BITE_DEADLINE = 5000;
+// How slowly the interested fish swims to the float, in pixels per second.
+// (If it's far away, it swims a bit faster so it still makes it by BITE_DEADLINE.)
+const APPROACH_SPEED = 15;
+// The interested fish takes at least this long to reach the float (milliseconds),
+// so you can always see it coming.
+const MIN_APPROACH_TIME = 1200;
+// The interested fish is picked from this many fish closest to the float.
+const NEAREST_FISH = 3;
+// How likely each of those fish is to be the one. Only matters compared to the
+// numbers below (a fish with 0.5 is picked twice as often as one with 0.25).
 const BITE_CHANCE = 0.25;
 // The bite chance is multiplied by these, depending on how the last catch went:
 // After catching a fish: fish of the SAME color bite less often.
@@ -826,7 +835,9 @@ export class TestRoom extends Scene
             line: this.add.graphics(),
             landed: false,     // true once the float is on the water
             waited: 0,         // milliseconds the float has been on the water
-            hookedFish: null   // the fish that bit, or null
+            // when (in milliseconds on the water) a fish gets interested
+            interestAt: randomBetween(BITE_WAIT, BITE_WAIT + INTEREST_WINDOW),
+            hookedFish: null   // the fish swimming to the float or biting, or null
         };
 
         this.tweens.add({
@@ -873,44 +884,55 @@ export class TestRoom extends Scene
         this.checkForBite();
     }
 
+    // Once the float has been on the water long enough (interestAt),
+    // one fish near the float gets interested and starts swimming to it.
     checkForBite ()
     {
-        const floatX = this.fishing.float.x;
-        const waitedLongEnough = this.fishing.waited >= BITE_WAIT;
-        let biter = null;
-
-        this.fishes.forEach((fish) => {
-            const underFloat = Math.abs(fish.body.x - floatX) <= BITE_DISTANCE;
-
-            if (!underFloat)
-            {
-                // Swam away from the float: next time it comes by, it can decide again.
-                fish.ignoringFloat = false;
-                return;
-            }
-
-            if (biter || fish.ignoringFloat || !waitedLongEnough)
-            {
-                return;
-            }
-
-            // The fish decides once, as it arrives under the float, whether to bite.
-            if (Math.random() < this.biteChanceFor(fish))
-            {
-                biter = fish;
-            }
-            else
-            {
-                fish.ignoringFloat = true;
-            }
-        });
-
-        if (!biter)
+        if (this.fishing.waited < this.fishing.interestAt)
         {
             return;
         }
 
-        this.hookFish(biter);
+        const fish = this.pickInterestedFish();
+        if (fish)
+        {
+            this.hookFish(fish);
+        }
+    }
+
+    // Picks one of the NEAREST_FISH fish closest to the float.
+    // Which one is a bit random: fish with a higher bite chance are picked more often.
+    pickInterestedFish ()
+    {
+        const floatX = this.fishing.float.x;
+        const floatY = this.floorTop;
+        const distanceTo = (fish) => Math.hypot(fish.body.x - floatX, fish.body.y - floatY);
+
+        // The closest fish first, then keep only the first few.
+        const nearest = [...this.fishes]
+            .sort((a, b) => distanceTo(a) - distanceTo(b))
+            .slice(0, NEAREST_FISH);
+
+        if (nearest.length === 0)
+        {
+            return null; // no fish left in the water
+        }
+
+        // A "weighted" random pick: imagine each fish gets a slice of a wheel,
+        // as big as its bite chance, and the wheel is spun once.
+        const chances = nearest.map((fish) => this.biteChanceFor(fish));
+        const total = chances.reduce((sum, c) => sum + c, 0);
+        let spin = Math.random() * total;
+
+        for (let i = 0; i < nearest.length; i++)
+        {
+            spin -= chances[i];
+            if (spin < 0)
+            {
+                return nearest[i];
+            }
+        }
+        return nearest[nearest.length - 1];
     }
 
     // How likely this fish is to bite, depending on how the last catch went.
@@ -936,7 +958,7 @@ export class TestRoom extends Scene
             : BITE_CHANCE * AFTER_FAIL_OTHER_COLOR;
     }
 
-    // A fish has decided to bite: it swims to the float first.
+    // A fish is interested: it slowly swims to the float first, then bites.
     hookFish (fish)
     {
         // The fish stops its normal swimming, and the float stops drifting.
@@ -947,9 +969,12 @@ export class TestRoom extends Scene
         const targetX = float.x;
         const targetY = this.floorTop + 4; // just below the float
 
-        // The fish swims to the float. The further away it is, the longer it takes.
+        // How long the swim takes: slow (APPROACH_SPEED), but it must arrive by BITE_DEADLINE,
+        // and it never takes less than MIN_APPROACH_TIME.
         const distance = Math.hypot(targetX - fish.body.x, targetY - fish.body.y);
-        const duration = Math.max(200, distance / BITE_SWIM_SPEED * 1000);
+        const slowTime = distance / APPROACH_SPEED * 1000;
+        const timeLeft = BITE_DEADLINE - this.fishing.waited;
+        const duration = Math.max(MIN_APPROACH_TIME, Math.min(slowTime, timeLeft));
 
         this.tweens.add({
             targets: fish.body,
