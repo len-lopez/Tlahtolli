@@ -1,11 +1,11 @@
 {
     "merchant": {
         "line": { "nah": "Nipochtecatl.", "en": "I am a merchant." },
-        "inspect": { "nah": "Ca pochtecatl.", "en": "It is a merchant." },
+        "inspect": { "nah": "Ca pochtecatl.", "en": "It's a merchant." },
         "sells": [ "michin" ]
     },
     "judge": {
         "line": { "nah": "Tianquizpan nitlayacanqui.", "en": "I am the leader of the market." },
-        "inspect": { "nah": "Ca tianquizpan tlayacanqui.", "en": "It is the leader of the market." }
+        "inspect": { "nah": "Ca tianquizpan tlayacanqui.", "en": "It's the leader of the market." }
     }
 }
