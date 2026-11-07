@@ -52,7 +52,7 @@ function buildWaterRoomGrid ()
 const MARKET_WIDTH = ROOM_WIDTH * 2;
 const PLATEAU_WIDTH = 10;   // the plateau: the first 10 tiles from the left
 const PLATEAU_HEIGHT = 7;   // how many tiles higher than the normal ground
-const SLOPE_WIDTH = 18;     // the slope: the 18 tiles right after the plateau
+const SLOPE_WIDTH = 10;     // the slope: the 10 tiles right after the plateau
 
 // The slope is not made of tiles (tiles can only make blocky steps).
 // What you SEE is a smooth brown triangle.
@@ -87,20 +87,62 @@ function buildMarketplaceGrid ()
     return grid;
 }
 
-// NPCs (people to talk to later) in the Marketplace: placeholder boxes,
-// the same size as the player (12 x 24) but purple.
-// col  = the tile column they stand on, counted from the Marketplace's left edge.
-// type = who they are; what they say is in src/data/npcs.json under that name.
-// 5 merchants standing around in the right half, the marketplace judge on the plateau.
+// NPCs (people to talk to later) in the Marketplace: placeholder boxes, 12 pixels wide.
+// Everyone SITS on a mat, so they are shorter than the standing player (24).
+// col      = the tile column they sit on, counted from the Marketplace's left edge.
+// type     = who they are; what they say is in src/data/npcs.json under that name.
+// height   = how tall the sitting box is, in pixels (slightly different for each person).
+// color    = the color of their cloak (the box).
+// headband = the color of a thin band near the top of the box, or null for none.
+// wares    = (merchants only) little piles of goods lying on the mat next to them:
+//            x = left/right of the merchant's middle, width/height in pixels, and color.
+// 5 merchants in the right half, the marketplace leader on the plateau under the roof.
 const MARKET_NPCS = [
-    { col: 5,  type: 'judge' },
-    { col: 36, type: 'merchant' },
-    { col: 41, type: 'merchant' },
-    { col: 47, type: 'merchant' },
-    { col: 52, type: 'merchant' },
-    { col: 58, type: 'merchant' }
+    { col: 5, type: 'judge', height: 17, color: 0xf0ead6, headband: 0xb22222, wares: [] },
+    {
+        col: 36, type: 'merchant', height: 16, color: 0x9b5de5, headband: null,
+        wares: [ { x: -12, width: 6, height: 4, color: 0x6b8e23 }, { x: -6, width: 4, height: 3, color: 0x6b8e23 } ]
+    },
+    {
+        col: 41, type: 'merchant', height: 15, color: 0x7b4fc4, headband: 0xf2c418,
+        wares: [ { x: -11, width: 8, height: 6, color: 0xb5651d } ]
+    },
+    {
+        col: 47, type: 'merchant', height: 17, color: 0xa86fd8, headband: null,
+        wares: [ { x: -13, width: 4, height: 4, color: 0xd62828 }, { x: -8, width: 4, height: 4, color: 0xf2c418 } ]
+    },
+    {
+        col: 52, type: 'merchant', height: 14, color: 0x8a5cc9, headband: 0x2a9d8f,
+        wares: [ { x: -11, width: 7, height: 3, color: 0x5a3a1a }, { x: -10, width: 5, height: 2, color: 0x5a3a1a } ]
+    },
+    {
+        col: 58, type: 'merchant', height: 16, color: 0x9467d0, headband: 0xffffff,
+        wares: [ { x: -12, width: 5, height: 5, color: 0xe9c46a }, { x: -7, width: 3, height: 3, color: 0xe9c46a } ]
+    }
 ];
-const COLOR_NPC = 0x9b5de5;
+
+// Mats (petates) the NPCs sit on: a flat woven rectangle with darker stripes.
+const MAT_WIDTH = 32;
+const MAT_HEIGHT = 3;
+const COLOR_MAT = 0xc8a96e;
+const COLOR_MAT_STRIPE = 0xa8884e;
+
+// The leader's shelter on the plateau: a wall at the far left and a flat roof over the leader,
+// held up on the right by a wooden post. Only to look at; you walk through all of it.
+const SHELTER_WALL_WIDTH = 2;       // in tiles, from the Marketplace's left edge
+const SHELTER_WALL_HEIGHT = 5;      // in tiles, above the plateau
+const SHELTER_ROOF_HEIGHT = 4;      // how high the roof's lower edge is above the plateau, in tiles
+const SHELTER_ROOF_THICKNESS = 6;   // in pixels
+const SHELTER_ROOF_RIGHT = 9;       // the tile column where the roof (and its post) ends
+const SHELTER_POST_WIDTH = 4;       // in pixels
+const COLOR_SHELTER_WALL = 0xe8dcc0;
+const COLOR_SHELTER_STRIPE = 0xa83232; // a painted band along the wall
+const COLOR_SHELTER_ROOF = 0x9c7a4a;
+const COLOR_SHELTER_POST = 0x6b4423;
+// The leader's seat has a backrest: a reed board right behind (left of) the leader.
+const BACKREST_WIDTH = 3;
+const BACKREST_HEIGHT = 22;
+const COLOR_BACKREST = 0xb89b5e;
 
 // --- Lake of Colors: flowering bushes and trees (to look at and inspect with Itta; you walk through them) ---
 // col   = the tile column of the plant's middle, counted from the Lake's left edge
@@ -353,13 +395,8 @@ export class TestRoom extends Scene
         // --- Home: house and trees ---
         this.decorateHome();
 
-        // --- NPCs in the Marketplace: purple boxes standing on the ground ---
-        // Remembered with their type, so Ihtoa can find them and know what they say.
-        this.npcs = MARKET_NPCS.map((npc) => {
-            const x = roomLeft(0) + npc.col * TILE + TILE / 2;
-            const box = this.add.rectangle(x, this.groundTopAt(x) - 12, 12, 24, COLOR_NPC);
-            return { box, type: npc.type };
-        });
+        // --- Marketplace: the leader's shelter, and the NPCs sitting on their mats ---
+        this.decorateMarket();
 
         // While the player's own speech animation runs (Ihtoa with nobody in front):
         // { bubble, timer }. null otherwise.
@@ -685,6 +722,71 @@ export class TestRoom extends Scene
 
             // For Itta: where the plant stands, and how wide it is (the crown's width).
             return { x, width: plant.crown.width, bottom: ground, type: plant.type };
+        });
+    }
+
+    // Draws the Marketplace: the leader's shelter (wall, roof, post) on the plateau,
+    // and every NPC (MARKET_NPCS) sitting on a mat, with their wares next to them.
+    // The shelter, mats and wares are drawn behind everything (depth -1) and aren't solid.
+    // The NPC boxes are remembered in this.npcs with their type, so Ihtoa and Itta can find them.
+    decorateMarket ()
+    {
+        const left = roomLeft(0);
+        const plateauTop = (ROOM_HEIGHT - FLOOR_ROWS - PLATEAU_HEIGHT) * TILE;
+
+        // Wall at the far left, with a painted band a little below its top.
+        const wallWidth = SHELTER_WALL_WIDTH * TILE;
+        const wallTop = plateauTop - SHELTER_WALL_HEIGHT * TILE;
+        this.add.rectangle(left, wallTop, wallWidth, SHELTER_WALL_HEIGHT * TILE, COLOR_SHELTER_WALL)
+            .setOrigin(0, 0).setDepth(-1);
+        this.add.rectangle(left, wallTop + 6, wallWidth, 4, COLOR_SHELTER_STRIPE)
+            .setOrigin(0, 0).setDepth(-1);
+
+        // Flat roof, from the wall to the post, sticking out a little past the post.
+        const roofRight = left + SHELTER_ROOF_RIGHT * TILE;
+        const roofBottom = plateauTop - SHELTER_ROOF_HEIGHT * TILE;
+        this.add.rectangle(left + wallWidth, roofBottom - SHELTER_ROOF_THICKNESS,
+            roofRight + 4 - (left + wallWidth), SHELTER_ROOF_THICKNESS, COLOR_SHELTER_ROOF)
+            .setOrigin(0, 0).setDepth(-1);
+
+        // Wooden post holding up the roof's right end.
+        this.add.rectangle(roofRight - SHELTER_POST_WIDTH, roofBottom,
+            SHELTER_POST_WIDTH, plateauTop - roofBottom, COLOR_SHELTER_POST)
+            .setOrigin(0, 0).setDepth(-1);
+
+        // NPCs, each on a mat.
+        this.npcs = MARKET_NPCS.map((npc) => {
+            const x = left + npc.col * TILE + TILE / 2;
+            const ground = this.groundTopAt(x);
+            const matTop = ground - MAT_HEIGHT;
+
+            // Mat, with three darker woven stripes.
+            this.add.rectangle(x, ground - MAT_HEIGHT / 2, MAT_WIDTH, MAT_HEIGHT, COLOR_MAT).setDepth(-1);
+            [ -10, 0, 10 ].forEach((offset) => {
+                this.add.rectangle(x + offset, ground - MAT_HEIGHT / 2, 2, MAT_HEIGHT, COLOR_MAT_STRIPE).setDepth(-1);
+            });
+
+            // The leader's seat has a backrest.
+            if (npc.type === 'judge')
+            {
+                this.add.rectangle(x - 6 - BACKREST_WIDTH / 2, matTop - BACKREST_HEIGHT / 2,
+                    BACKREST_WIDTH, BACKREST_HEIGHT, COLOR_BACKREST).setDepth(-1);
+            }
+
+            // Wares lying on the mat.
+            npc.wares.forEach((ware) => {
+                this.add.rectangle(x + ware.x, matTop - ware.height / 2, ware.width, ware.height, ware.color)
+                    .setDepth(-1);
+            });
+
+            // The person: a box sitting on the mat, with an optional headband.
+            const box = this.add.rectangle(x, matTop - npc.height / 2, 12, npc.height, npc.color);
+            if (npc.headband !== null)
+            {
+                this.add.rectangle(x, matTop - npc.height + 4, 12, 2, npc.headband);
+            }
+
+            return { box, type: npc.type };
         });
     }
 
