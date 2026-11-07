@@ -8,13 +8,17 @@
 // The counts are kept under the word itself (e.g. "Chichiltic"), not under the minigame,
 // so that later minigames can count toward the same numbers.
 // Example: { "Chichiltic": { "right": 3, "wrong": 1 }, "Iztac": { "right": 1, "wrong": 0 } }
+//
+// There is also a list of words that need a reminder: words the player just got wrong in a
+// hard minigame, so the next time one of them comes up, an easy minigame is shown instead.
+// Only for this session; not saved.
 
 // Makes a new progress record.
 // saved = the "wordStats" part of a save file, or nothing for a new game.
 // Anything strange in it (not a whole number, below 0, ...) is left out.
 export function createProgress (saved)
 {
-    const progress = { saved: {}, session: {} };
+    const progress = { saved: {}, session: {}, remind: {} };
 
     if (saved !== null && typeof saved === 'object')
     {
@@ -50,6 +54,25 @@ export function timesRight (progress, word, which)
 {
     const counts = progress[which][word];
     return counts ? counts.right : 0;
+}
+
+// Marks a word as needing a reminder (see the top of this file), or takes the mark away.
+export function setReminder (progress, word, needed)
+{
+    if (needed)
+    {
+        progress.remind[word] = true;
+    }
+    else
+    {
+        delete progress.remind[word];
+    }
+}
+
+// Does this word need a reminder?
+export function needsReminder (progress, word)
+{
+    return progress.remind[word] === true;
 }
 
 // A copy of the saved counts, for the save file.
