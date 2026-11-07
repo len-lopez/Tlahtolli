@@ -773,6 +773,13 @@ export class TestRoom extends Scene
         return bubble;
     }
 
+    // Ends a speech animation early: stops the blinking and removes the box.
+    stopSpeech (bubble)
+    {
+        this.tweens.killTweensOf(bubble);
+        bubble.destroy();
+    }
+
     // Puts the speech box just above the speaker's head.
     placeSpeech (bubble, speaker, side)
     {
@@ -1025,7 +1032,9 @@ export class TestRoom extends Scene
     // Only merchants trade: an NPC is a merchant if it has a "sells" list in src/data/npcs.json.
     // - Nobody in front: the "that didn't work" wobble, like fishing away from water.
     // - Another NPC in front: a placeholder message that they're not interested.
-    // - A merchant in front: buy opens the shop window, sell opens your bag to sell from.
+    // - A merchant in front: the merchant does the speech animation and asks
+    //   what you want to buy/sell (dialogue box). When you close the box,
+    //   buy opens the shop window, sell opens your bag to sell from.
     trade (kind)
     {
         const npc = this.npcInFront();
@@ -1041,7 +1050,15 @@ export class TestRoom extends Scene
         }
         else
         {
-            overlay.openTrade(kind, npcText[npc.type].sells);
+            const bubble = this.speechAnimation(npc.box, 0);
+            const question = kind === 'buy' ? menuText.messages.whatToBuy : menuText.messages.whatToSell;
+
+            overlay.openDialogue(question, () => {
+                // The room stops while the shop window is open, so end the speech
+                // animation first; otherwise the blinking box would freeze in place.
+                this.stopSpeech(bubble);
+                overlay.openTrade(kind, npcText[npc.type].sells);
+            });
         }
     }
 
