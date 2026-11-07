@@ -138,6 +138,15 @@ function shuffle (list)
 const COLOR_EMPTY = 0x333333;
 const COLOR_USED = 0x2e7d9a;
 const COLOR_EDITING = 0xf2c418; // outline of the q/w/e circle you're typing a word for
+// Number entry (see openDigits): the window, the digit boxes, and the space between them.
+const DIGIT_PANEL_WIDTH = 120;
+const DIGIT_PANEL_HEIGHT = 70;
+const DIGIT_BOX_WIDTH = 18;
+const DIGIT_BOX_HEIGHT = 22;
+const DIGIT_GAP = 6;
+// The leftmost digit (hundreds) only goes up to this.
+const DIGIT_FIRST_MAX = 4;
+
 const COLOR_LOCKED = '#e63946'; // a locked text blinks in this color when you try to gloss it
 const LOCKED_BLINKS = 3;          // how often it blinks
 const LOCKED_BLINK_TIME = 120;    // milliseconds red, then the same white
@@ -487,6 +496,9 @@ export class Overlay extends Scene
         // or null.
         this.optionList = null;
 
+        // The number entry while it's open (see openDigits), or null.
+        this.digitEntry = null;
+
         // --- Shop window: buying (Cohua) or selling (Namaca), hidden at the start ---
         // Looks like the menu: the same panel, a list with a blue bar on the chosen line,
         // and the hints "(q) confirm  (w) back" at the bottom left.
@@ -562,6 +574,12 @@ export class Overlay extends Scene
         if (this.mode === 'prompt')
         {
             this.handlePromptKey(event);
+            return;
+        }
+
+        if (this.mode === 'digits')
+        {
+            this.handleDigitKey(event);
             return;
         }
 
@@ -1949,6 +1967,7 @@ export class Overlay extends Scene
         const words = {
             play: menuText.buttons.menu,
             prompt: menuText.buttons.confirm,
+            digits: menuText.buttons.confirm,
             menu: menuText.buttons.close,
             trade: menuText.buttons.close
         };
@@ -2000,6 +2019,173 @@ export class Overlay extends Scene
     {
         const room = this.scene.get('TestRoom');
         return room.sleep !== null || room.talking !== null;
+    }
+
+    // ---------- Number entry (three digits) ----------
+
+    // Lets the player enter a number with three digits, e.g. 233 (used by the cloth buyer:
+    // "which one is the lowest price you found?"). A small window in the middle of the screen
+    // shows three digits side by side; the chosen digit has a colored box and arrows
+    // above and below it. No time limit.
+    // - left/right = choose a digit, up/down = make it bigger/smaller (it goes around:
+    //   after 9 comes 0). The leftmost digit only goes from 0 to DIGIT_FIRST_MAX.
+    // - number keys = type the number: each new digit comes in from the right and the others
+    //   move one place to the left (0 0 2 -> 0 2 3 -> 2 3 3). Backspace takes the last one away.
+    // - q or Enter = done; w = give up (counts as a wrong answer).
+    // Everything can also be clicked: a digit to choose it, the arrows, and the q/w circles.
+    // onDone(number) = called with the entered number, or with null after w.
+    openDigits (onDone)
+    {
+        const w = this.scale.width;
+        const h = this.scale.height;
+        const ui = this.add.container(0, 0);
+
+        // The window
+        const panel = this.add.rectangle(w / 2, h / 2, DIGIT_PANEL_WIDTH, DIGIT_PANEL_HEIGHT, 0x222222, 0.9)
+            .setStrokeStyle(1, 0xffffff);
+        ui.add(panel);
+
+        // The three digits, each in a box, with arrows above and below.
+        const digits = [];
+        for (let i = 0; i < 3; i++)
+        {
+            const x = w / 2 + (i - 1) * (DIGIT_BOX_WIDTH + DIGIT_GAP);
+            const box = this.add.rectangle(x, h / 2, DIGIT_BOX_WIDTH, DIGIT_BOX_HEIGHT, COLOR_EMPTY)
+                .setStrokeStyle(1, 0xffffff);
+            const text = this.add.text(x, h / 2, '0', TEXT_STYLE).setOrigin(0.5);
+            const up = this.add.text(x, h / 2 - DIGIT_BOX_HEIGHT / 2 - 7, '▲', { ...TEXT_STYLE, fontSize: 8 })
+                .setOrigin(0.5);
+            const down = this.add.text(x, h / 2 + DIGIT_BOX_HEIGHT / 2 + 7, '▼', { ...TEXT_STYLE, fontSize: 8 })
+                .setOrigin(0.5);
+
+            box.setInteractive({ useHandCursor: true });
+            box.on('pointerdown', () => this.chooseDigit(i));
+            up.setInteractive({ useHandCursor: true });
+            up.on('pointerdown', () => { this.chooseDigit(i); this.changeDigit(1); });
+            down.setInteractive({ useHandCursor: true });
+            down.on('pointerdown', () => { this.chooseDigit(i); this.changeDigit(-1); });
+
+            ui.add([ box, text, up, down ]);
+            digits.push({ box, text, up, down });
+        }
+
+        // Hints at the bottom left: (q) Quemah  (w) Ximocuepa. The circles can be clicked.
+        const hintY = h - 14;
+        [ [ 'q', menuText.buttons.confirm ], [ 'w', menuText.buttons.back ] ].forEach(([ letter, label ], i) => {
+            const circleX = 18 + i * 80;
+            const circle = this.add.circle(circleX, hintY, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
+            const letterText = this.add.text(circleX, hintY, letter, TEXT_STYLE).setOrigin(0.5);
+            const labelText = this.add.text(circleX + 16, hintY, '', TEXT_STYLE).setOrigin(0, 0.5);
+            this.makeGlossable(labelText);
+            this.setGlossLabel(labelText, label);
+            circle.setInteractive({ useHandCursor: true });
+            circle.on('pointerdown', () => this.finishDigits(letter === 'q'));
+            ui.add([ circle, letterText, labelText ]);
+        });
+
+        this.digitEntry = { ui, digits, values: [ 0, 0, 0 ], chosen: 0, onDone };
+        this.mode = 'digits';
+        this.qweButtons.setVisible(false);
+        this.showDigits();
+    }
+
+    // Shows the three digits, and which one is chosen (colored box, arrows only there).
+    showDigits ()
+    {
+        const entry = this.digitEntry;
+        entry.digits.forEach((digit, i) => {
+            const chosen = i === entry.chosen;
+            digit.text.setText(String(entry.values[i]));
+            digit.box.setFillStyle(chosen ? COLOR_USED : COLOR_EMPTY);
+            digit.up.setVisible(chosen);
+            digit.down.setVisible(chosen);
+        });
+    }
+
+    // Chooses digit number i (0 = left, 2 = right).
+    chooseDigit (i)
+    {
+        if (this.mode !== 'digits')
+        {
+            return;
+        }
+        this.digitEntry.chosen = i;
+        this.showDigits();
+    }
+
+    // Makes the chosen digit 1 bigger (step 1) or 1 smaller (step -1), going around.
+    // The leftmost digit goes from 0 to DIGIT_FIRST_MAX, the others from 0 to 9.
+    changeDigit (step)
+    {
+        if (this.mode !== 'digits')
+        {
+            return;
+        }
+        const entry = this.digitEntry;
+        const count = (entry.chosen === 0 ? DIGIT_FIRST_MAX : 9) + 1;
+        entry.values[entry.chosen] = (entry.values[entry.chosen] + step + count) % count;
+        this.showDigits();
+    }
+
+    // A key press while entering a number (see openDigits).
+    handleDigitKey (event)
+    {
+        const entry = this.digitEntry;
+        const key = event.key.toLowerCase();
+
+        if (key === 'arrowleft' || key === 'arrowright')
+        {
+            const step = key === 'arrowleft' ? -1 : 1;
+            this.chooseDigit(Math.min(Math.max(entry.chosen + step, 0), 2));
+        }
+        else if (key === 'arrowup' || key === 'arrowdown')
+        {
+            this.changeDigit(key === 'arrowup' ? 1 : -1);
+        }
+        else if (/^[0-9]$/.test(key))
+        {
+            // The new digit comes in from the right, the others move left.
+            // Not possible if the leftmost digit would get too big.
+            const moved = [ entry.values[1], entry.values[2], Number(key) ];
+            if (moved[0] <= DIGIT_FIRST_MAX)
+            {
+                entry.values = moved;
+                this.showDigits();
+            }
+        }
+        else if (key === 'backspace')
+        {
+            // The last digit goes away, the others move right; a 0 comes in on the left.
+            entry.values = [ 0, entry.values[0], entry.values[1] ];
+            this.showDigits();
+        }
+        else if (key === 'q' || key === 'enter')
+        {
+            this.finishDigits(true);
+        }
+        else if (key === 'w')
+        {
+            this.finishDigits(false);
+        }
+    }
+
+    // Closes the number entry. done = true: the entered number is given to onDone;
+    // false (w): onDone gets null.
+    finishDigits (done)
+    {
+        if (this.mode !== 'digits')
+        {
+            return;
+        }
+        const entry = this.digitEntry;
+        const number = entry.values[0] * 100 + entry.values[1] * 10 + entry.values[2];
+
+        entry.ui.destroy();
+        this.digitEntry = null;
+        this.mode = 'play';
+        this.qweButtons.setVisible(true);
+
+        entry.onDone(done ? number : null);
     }
 
     // ---------- Shop window (Cohua / Namaca) ----------
