@@ -149,20 +149,25 @@ export class Overlay extends Scene
         });
 
         // --- Life points (Yollotl) in the top left corner ---
-        // One red square per life point, side by side.
+        // First the word (from src/data/menu.json), in the corner.
+        const lifeLabel = this.add.text(LIFE_LEFT, LIFE_TOP, menuText.hud.life, TEXT_STYLE);
+
+        // Then one red square per life point, side by side, right after the word.
+        // They start where the word ends (plus a small gap), and sit at the
+        // same height as the middle of the word.
         // The room knows how many life points there are (3 when full).
+        const squaresLeft = LIFE_LEFT + lifeLabel.width + LIFE_GAP * 2;
+        const squaresTop = LIFE_TOP + (lifeLabel.height - LIFE_SQUARE) / 2;
+
         this.lifeSquares = [];
         for (let i = 0; i < MAX_LIFE; i++)
         {
             const square = this.add.rectangle(
-                LIFE_LEFT + i * (LIFE_SQUARE + LIFE_GAP), LIFE_TOP,
+                squaresLeft + i * (LIFE_SQUARE + LIFE_GAP), squaresTop,
                 LIFE_SQUARE, LIFE_SQUARE, COLOR_LIFE
             ).setOrigin(0, 0);
             this.lifeSquares.push(square);
         }
-
-        // The word underneath the squares (from src/data/menu.json).
-        this.add.text(LIFE_LEFT, LIFE_TOP + LIFE_SQUARE + 3, menuText.hud.life, TEXT_STYLE);
 
         // Show as many squares as the player has life points right now
         // (after loading a save file this can be fewer than 3).
