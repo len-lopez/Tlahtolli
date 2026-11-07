@@ -32,7 +32,7 @@
     },
     "shop": {
         "buy": { "nah": "Niccohua:", "en": "I'm buying:" },
-        "sell": { "nah": "Nicnamaca:", "en": "Sell:" }
+        "sell": { "nah": "Nicnamaca:", "en": "I'm selling:" }
     },
     "messages": {
         "badFile": { "nah": "Inin amo tlapialli.", "en": "This file is not a Tlahtolli save file." },
