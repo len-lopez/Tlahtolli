@@ -240,7 +240,7 @@ export class Overlay extends Scene
 
         this.pages = {
             main: this.makeChoicePage('main', menuText.main),
-            map: this.makeMapPage(),
+            map: this.makeChoicePage('map', menuText.map),
             words: this.makeWordListPage(),
             save: this.makeChoicePage('save', menuText.save)
         };
@@ -436,19 +436,6 @@ export class Overlay extends Scene
         return { container, items: [], highlight: null, chosen: 0 };
     }
 
-    // The map page: one line of text per room name in src/data/menu.json ("map").
-    // Like the word list, it's only a list to read; nothing can be chosen on it.
-    makeMapPage ()
-    {
-        const container = this.add.container(0, 0);
-
-        menuText.map.forEach((roomName, i) => {
-            container.add(this.add.text(LIST_LEFT, LIST_TOP + i * LINE_HEIGHT, roomName, TEXT_STYLE));
-        });
-
-        return { container, items: [], highlight: null, chosen: 0 };
-    }
-
     openMenu ()
     {
         this.mode = 'menu';
@@ -516,7 +503,7 @@ export class Overlay extends Scene
         {
             if (page.items.length > 0)
             {
-                this.confirmChoice(page.items[page.chosen].id);
+                this.confirmChoice(page.items[page.chosen]);
             }
         }
         else if (key === 'w')
@@ -544,14 +531,25 @@ export class Overlay extends Scene
         const page = this.pages[pageName];
         page.chosen = index;
         this.updateHighlight();
-        this.confirmChoice(page.items[index].id);
+        this.confirmChoice(page.items[index]);
     }
 
-    // q was pressed (or a line clicked) on a menu line. id comes from src/data/menu.json.
-    confirmChoice (id)
+    // q was pressed (or a line clicked) on a menu line.
+    // item = that line from src/data/menu.json, e.g. { id: 'save', label: 'Save' }.
+    confirmChoice (item)
     {
+        // On the map page, every line is a room: go there.
+        if (this.page === 'map')
+        {
+            this.teleport(item.room);
+            return;
+        }
+
+        const id = item.id;
+
         if (id === 'map')
         {
+            this.pages.map.chosen = 0;
             this.showPage('map');
         }
         else if (id === 'words')
@@ -577,6 +575,14 @@ export class Overlay extends Scene
             );
         }
         // 'profile', 'bag' and 'settings' do nothing yet.
+    }
+
+    // For testing: closes the menu and puts the player into a room right away.
+    // room = the room's number (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors).
+    teleport (room)
+    {
+        this.closeMenu();
+        this.scene.get('TestRoom').goToRoom(room);
     }
 
     // Starts the room again from the beginning with the loaded save file.

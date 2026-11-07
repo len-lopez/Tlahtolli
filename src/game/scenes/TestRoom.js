@@ -338,6 +338,19 @@ export class TestRoom extends Scene
         }
     }
 
+    // For testing (from the Map in the menu): puts the player into another room,
+    // 4 tiles from its left edge, standing on the floor (the same spot as at the start).
+    // The camera and the fish follow by themselves in the next frame (see update).
+    goToRoom (room)
+    {
+        if (!Number.isInteger(room) || room < 0 || room >= ROOMS.length)
+        {
+            return; // no such room
+        }
+
+        this.player.body.reset(room * ROOM_WIDTH * TILE + 4 * TILE, this.floorTop - 12);
+    }
+
     // Puts the eye on the front side of the player, near the top.
     updateFace ()
     {

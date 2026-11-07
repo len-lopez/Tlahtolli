@@ -8,9 +8,9 @@
         { "id": "save", "label": "Save" }
     ],
     "map": [
-        "Empty Room",
-        "Lake of Colors",
-        "Marketplace"
+        { "room": 1, "label": "Empty Room" },
+        { "room": 2, "label": "Lake of Colors" },
+        { "room": 0, "label": "Marketplace" }
     ],
     "save": [
         { "id": "download", "label": "Download save file" },
