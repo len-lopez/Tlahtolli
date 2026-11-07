@@ -2,6 +2,7 @@ import { Scene, Geom } from 'phaser';
 import wordList from '../../data/wordlist.json';
 import fishingWords from '../../data/fishing-words.json';
 import menuText from '../../data/menu.json';
+import items from '../../data/items.json';
 import { createSave, downloadSave, pickSaveFile } from '../save.js';
 import { MAX_LIFE } from './TestRoom.js';
 
@@ -93,6 +94,14 @@ const MENU_WIDTH = 200;
 const LIST_LEFT = (512 - MENU_WIDTH) / 2 + 16;
 const LIST_TOP = 45;
 const LINE_HEIGHT = 16;
+
+// Bag page: where the item numbers end, near the right edge of the menu panel.
+const LIST_RIGHT = (512 + MENU_WIDTH) / 2 - 16;
+
+// Placeholder fish next to "Michin" in the bag: same size as the fish in the water (10 x 5).
+const BAG_FISH_WIDTH = 10;
+const BAG_FISH_HEIGHT = 5;
+const COLOR_BAG_FISH = 0x9fb7c9;
 
 // The overlay is its own scene that is drawn on top of the room.
 // It never moves with the map, so it always stays in the same place on screen.
@@ -213,6 +222,7 @@ export class Overlay extends Scene
         // --- Menu screen, hidden at the start ---
         // It has several pages; only one is shown at a time:
         // 'main'  = Profile, Bag, Map, Word List, Settings, Save
+        // 'bag'   = items the player has, with how many
         // 'map'   = list of all rooms
         // 'words' = the word list
         // 'save'  = download / upload a save file
@@ -240,6 +250,7 @@ export class Overlay extends Scene
 
         this.pages = {
             main: this.makeChoicePage('main', menuText.main),
+            bag: { container: this.add.container(0, 0), items: [], highlight: null, chosen: 0 },
             map: this.makeChoicePage('map', menuText.map),
             words: this.makeWordListPage(),
             save: this.makeChoicePage('save', menuText.save)
@@ -436,6 +447,35 @@ export class Overlay extends Scene
         return { container, items: [], highlight: null, chosen: 0 };
     }
 
+    // Writes what's in the bag onto the bag page. Called every time the bag is opened,
+    // because what's inside changes while playing.
+    // One line per item the player has (items with 0 are left out):
+    // placeholder picture on the left, name, and the number near the right edge.
+    // Like the word list, it's only a list to read; nothing can be chosen on it.
+    fillBagPage ()
+    {
+        const container = this.pages.bag.container;
+        container.removeAll(true); // take away what was written last time
+
+        const bag = this.scene.get('TestRoom').bag;
+        const owned = items.filter((item) => (bag[item.id] ?? 0) > 0);
+
+        owned.forEach((item, i) => {
+            const top = LIST_TOP + i * LINE_HEIGHT;
+
+            // Placeholder picture: for now every item is a fish (Michin is the only one).
+            const picture = this.add.rectangle(LIST_LEFT, top + LINE_HEIGHT / 2 - 1,
+                BAG_FISH_WIDTH, BAG_FISH_HEIGHT, COLOR_BAG_FISH).setOrigin(0, 0.5);
+
+            const name = this.add.text(LIST_LEFT + BAG_FISH_WIDTH + 6, top, item.name, TEXT_STYLE);
+
+            // The number's right edge stays put, so bigger numbers grow to the left.
+            const amount = this.add.text(LIST_RIGHT, top, String(bag[item.id]), TEXT_STYLE).setOrigin(1, 0);
+
+            container.add([ picture, name, amount ]);
+        });
+    }
+
     openMenu ()
     {
         this.mode = 'menu';
@@ -547,7 +587,12 @@ export class Overlay extends Scene
 
         const id = item.id;
 
-        if (id === 'map')
+        if (id === 'bag')
+        {
+            this.fillBagPage();
+            this.showPage('bag');
+        }
+        else if (id === 'map')
         {
             this.pages.map.chosen = 0;
             this.showPage('map');
@@ -574,7 +619,7 @@ export class Overlay extends Scene
                 () => this.saveMessage.setText(menuText.messages.badFile)
             );
         }
-        // 'profile', 'bag' and 'settings' do nothing yet.
+        // 'profile' and 'settings' do nothing yet.
     }
 
     // For testing: closes the menu and puts the player into a room right away.
