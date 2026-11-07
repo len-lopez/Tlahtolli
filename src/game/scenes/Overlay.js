@@ -6,22 +6,38 @@ import items from '../../data/items.json';
 import { createSave, downloadSave, pickSaveFile } from '../save.js';
 import { nahuatl, english, hasGloss, getAuxLanguage, setAuxLanguage } from '../language.js';
 import { MAX_LIFE } from './TestRoom.js';
-import { savedProgress } from '../progress.js';
+import { savedProgress, timesRight, needsReminder, setReminder } from '../progress.js';
 
 const SLOT_KEYS = [ 'q', 'w', 'e' ];
 
 // How long the player has to catch a biting fish, in milliseconds.
 const MINIGAME_TIME = 5000;
 
-// Which minigame you get after pulling in a fish, and how often.
+// Which of the two easy minigames you get after pulling in a fish, and how often.
 // The numbers only matter compared to each other: 50 and 50 = half the time each;
 // 75 and 25 would be three out of four times the word order puzzle.
 // order  = put the three parts of the word in the right order
 // choice = pick the right color word out of three
+// (The hard one, typing, has its own rules below; the easy ones share whatever is left.)
 const MINIGAME_CHANCES = {
     order: 50,
     choice: 50
 };
+
+// --- Typing minigame: type the color word and press Enter ---
+// How long you have to type, in milliseconds.
+const TYPING_TIME = 10000;
+// A color can only be typed once it was caught at least once on this save file.
+// Its chance then grows with every catch of that color (counted on the save file):
+// from TYPING_START at the first catch to TYPING_MAX at TYPING_FULL_AT catches.
+const TYPING_START = 1 / 6;
+const TYPING_MAX = 2 / 3;
+const TYPING_FULL_AT = 25;
+// As long as that color wasn't caught yet in this session, its chance is multiplied by this
+// (0.5 = halved), so every session starts with a bit of warming up.
+const TYPING_NO_SESSION_CATCH = 0.5;
+// After typing a color wrong, the next time that color bites it's always an easy minigame.
+const TYPING_BOX_WIDTH = 160;
 
 // Picks one name from a list of chances like MINIGAME_CHANCES (see above).
 function pickByChance (chances)
@@ -467,8 +483,10 @@ export class Overlay extends Scene
             return;
         }
 
-        // Holding a key down repeats it; ignore those repeats outside the prompt.
-        if (event.repeat)
+        // Holding a key down repeats it; ignore those repeats outside the prompt
+        // and the typing minigame (there, holding Backspace keeps deleting).
+        const typing = this.mode === 'minigame' && this.minigame && this.minigame.kind === 'typing';
+        if (event.repeat && !typing)
         {
             return;
         }
@@ -1306,14 +1324,8 @@ export class Overlay extends Scene
         const w = this.scale.width;
         const h = this.scale.height;
 
-        // Which minigame this time: 'order' or 'choice' (see MINIGAME_CHANCES).
-        // The color choice needs at least two other words to choose from;
-        // if the word list is too short, it's always the word order puzzle.
-        let kind = pickByChance(MINIGAME_CHANCES);
-        if (fishingWords.length < 3)
-        {
-            kind = 'order';
-        }
+        // Which minigame this time: 'typing', 'order' or 'choice' (see chooseMinigame).
+        const kind = this.chooseMinigame(entry);
 
         // The word in lowercase, cut into three parts.
         // If the word list says how to split the word ("parts"), use that;
@@ -1324,7 +1336,8 @@ export class Overlay extends Scene
             : splitIntoThree(entry.word.toLowerCase());
 
         // What's written in the three boxes (q, w, e from left to right).
-        let labels;
+        // (The typing minigame has no q/w/e boxes, so no labels.)
+        let labels = [];
         if (kind === 'order')
         {
             // The three parts, mixed. If they come out in the right order by chance,
@@ -1335,7 +1348,7 @@ export class Overlay extends Scene
                 labels = shuffle(parts);
             }
         }
-        else
+        else if (kind === 'choice')
         {
             // The fish's color word and two other color words picked at random, all mixed up.
             const others = shuffle(fishingWords.filter((e) => e !== entry)).slice(0, 2);
@@ -1348,10 +1361,12 @@ export class Overlay extends Scene
         const ui = this.add.container(0, 0);
 
         // --- Three boxes for q, w, e, side by side in the middle of the screen ---
+        // (Typing: one wide box in the middle instead, see below.)
         const boxY = h / 2;
         const boxes = {};
 
-        SLOT_KEYS.forEach((letter, i) => {
+        const boxKeys = kind === 'typing' ? [] : SLOT_KEYS;
+        boxKeys.forEach((letter, i) => {
             // Each box (rectangle + key letter + word part or color word) is its own
             // little container, so all three pieces move together when the box shakes.
             // slot 0, 1, 2  ->  left, middle, right
@@ -1367,6 +1382,22 @@ export class Overlay extends Scene
             ui.add(holder);
             boxes[letter] = { holder, box, part: labels[i], slot: i, used: false };
         });
+
+        // --- Typing: one wide box in the middle, showing what has been typed ---
+        // It's kept in the same list as the q/w/e boxes (under the name 'typing', in the
+        // middle slot), so it can turn red and shake the same way.
+        let typedLabel = null;
+        if (kind === 'typing')
+        {
+            const holder = this.add.container(this.boxSlotX(1), boxY);
+            const box = this.add.rectangle(0, 0, TYPING_BOX_WIDTH, BOX_HEIGHT, COLOR_EMPTY)
+                .setStrokeStyle(1, 0xffffff);
+            typedLabel = this.add.text(0, 0, '_', TEXT_STYLE).setOrigin(0.5);
+
+            holder.add([ box, typedLabel ]);
+            ui.add(holder);
+            boxes.typing = { holder, box, slot: 1 };
+        }
 
         // --- The word, spelled out above the boxes one part at a time ---
         // It starts empty. It sits exactly where the whole word appears at the end
@@ -1387,15 +1418,21 @@ export class Overlay extends Scene
         const bar = this.add.rectangle(barX, barY, barWidth, 6, COLOR_USED).setOrigin(0, 0.5);
         ui.add([ barBack, bar ]);
 
+        // Typing takes longer than pressing a key, so it gets more time.
+        const totalTime = kind === 'typing' ? TYPING_TIME : MINIGAME_TIME;
+
         this.minigame = {
-            kind,                     // 'order' or 'choice'
+            kind,                     // 'typing', 'order' or 'choice'
             entry,                    // the word from src/data/fishing-words.json
             ui,
             boxes,
             parts,
             spelled,                  // the text above the boxes that fills up
             next: 0,                  // which part has to be pressed next (0, 1 or 2)
-            timeLeft: MINIGAME_TIME,
+            typed: '',                // typing: what has been typed so far
+            typedLabel,               // typing: the text showing it
+            timeLeft: totalTime,
+            totalTime,
             bar,
             barWidth,
             timers: []                // things waiting to happen later (cancelled when it closes)
@@ -1413,6 +1450,12 @@ export class Overlay extends Scene
     // A key press during the minigame.
     handleMinigameKey (event)
     {
+        if (this.minigame.kind === 'typing')
+        {
+            this.handleTypingKey(event);
+            return;
+        }
+
         const letter = event.key.toLowerCase();
         if (!SLOT_KEYS.includes(letter))
         {
@@ -1474,6 +1517,86 @@ export class Overlay extends Scene
         return this.scale.width / 2 + (slot - 1) * (BOX_WIDTH + BOX_GAP);
     }
 
+    // A key press during the typing minigame: letters are typed, Backspace deletes
+    // the last one, Enter checks the word.
+    handleTypingKey (event)
+    {
+        const game = this.minigame;
+
+        if (event.key === 'Enter')
+        {
+            // Upper/lower case and spaces at the start or end don't matter.
+            const right = game.typed.trim().toLowerCase() === game.entry.word.toLowerCase();
+            game.boxes.typing.box.setFillStyle(right ? COLOR_CORRECT : COLOR_WRONG);
+            this.finishMinigame(right);
+            return;
+        }
+
+        if (event.key === 'Backspace')
+        {
+            game.typed = game.typed.slice(0, -1);
+        }
+        else if (event.key.length === 1)
+        {
+            // A normal character (letters, also ā, ē, ... if your keyboard can type them)
+            game.typed += event.key;
+        }
+
+        // The underscore shows where the next letter goes.
+        game.typedLabel.setText(game.typed + '_');
+    }
+
+    // Decides which minigame comes for this word: 'typing', 'order' or 'choice'.
+    // First a chance for typing (see typingChance); if it's not typing,
+    // one of the two easy ones, picked with MINIGAME_CHANCES.
+    chooseMinigame (entry)
+    {
+        const progress = this.scene.get('TestRoom').progress;
+
+        // After typing this word wrong last time: an easy one this time (the reminder is used up).
+        if (needsReminder(progress, entry.word))
+        {
+            setReminder(progress, entry.word, false);
+        }
+        else if (Math.random() < this.typingChance(entry.word))
+        {
+            return 'typing';
+        }
+
+        // The color choice needs at least two other words to choose from;
+        // if the word list is too short, it's always the word order puzzle.
+        if (fishingWords.length < 3)
+        {
+            return 'order';
+        }
+        return pickByChance(MINIGAME_CHANCES);
+    }
+
+    // How likely the typing minigame is for this word (0 = never, 1 = always).
+    // See the TYPING_... settings at the top of this file.
+    typingChance (word)
+    {
+        const progress = this.scene.get('TestRoom').progress;
+        const caught = timesRight(progress, word, 'saved');
+
+        // Never caught on this save file: no typing yet.
+        if (caught === 0)
+        {
+            return 0;
+        }
+
+        // From TYPING_START at the 1st catch, evenly up to TYPING_MAX at the TYPING_FULL_AT-th catch.
+        const grown = Math.min((caught - 1) / (TYPING_FULL_AT - 1), 1);
+        let chance = TYPING_START + grown * (TYPING_MAX - TYPING_START);
+
+        // Not caught yet in this session: less likely.
+        if (timesRight(progress, word, 'session') === 0)
+        {
+            chance *= TYPING_NO_SESSION_CATCH;
+        }
+        return chance;
+    }
+
     // Ends the minigame and tells the room whether the fish was caught.
     finishMinigame (success)
     {
@@ -1484,6 +1607,12 @@ export class Overlay extends Scene
 
         // The word that was asked, so the room can count the answer.
         const word = this.minigame.entry.word;
+
+        // Typed wrong (or too slow): next time this word comes up, an easy minigame reminds you of it.
+        if (this.minigame.kind === 'typing' && !success)
+        {
+            setReminder(this.scene.get('TestRoom').progress, word, true);
+        }
 
         if (success)
         {
@@ -1619,7 +1748,7 @@ export class Overlay extends Scene
         game.timeLeft -= delta;
 
         // Shrink the bar to show how much time is left.
-        const share = Math.max(game.timeLeft, 0) / MINIGAME_TIME;
+        const share = Math.max(game.timeLeft, 0) / game.totalTime;
         game.bar.setSize(game.barWidth * share, 6);
 
         if (game.timeLeft <= 0)
