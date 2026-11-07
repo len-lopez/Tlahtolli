@@ -77,6 +77,15 @@ const AFTER_CATCH_SAME_COLOR = 0.3;
 const AFTER_FAIL_SAME_COLOR = 2;
 const AFTER_FAIL_OTHER_COLOR = 0.5;
 
+// --- Life points (Yollotl) ---
+// How many life points the player has when full.
+// (The overlay uses this too, to know how many squares to draw.)
+export const MAX_LIFE = 3;
+// How many life points falling into the water costs.
+const WATER_DAMAGE = 1;
+// After blacking out: how long the screen takes to fade back in from black (milliseconds).
+const BLACKOUT_FADE = 1000;
+
 // A random whole number from min to max (both included).
 function randomBetween (min, max)
 {
@@ -216,6 +225,20 @@ export class TestRoom extends Scene
         {
             this.player.body.reset(savedRoom * ROOM_WIDTH * TILE + 4 * TILE, floorTop - 12);
         }
+
+        // Where the player wakes up after blacking out: room 1 (the first room without water),
+        // at the same spot where the game starts.
+        this.blackoutX = 4 * TILE;
+        this.blackoutY = floorTop - 12;
+
+        // --- Life points (Yollotl) ---
+        // A new game starts with full life.
+        // After loading a save file, the saved life points are used.
+        // A save file without life points (older version), or with a strange number, starts with full life.
+        const savedLife = data && data.save ? data.save.life : MAX_LIFE;
+        this.life = Number.isInteger(savedLife) && savedLife >= 1 && savedLife <= MAX_LIFE
+            ? savedLife
+            : MAX_LIFE;
 
         // Keyboard: arrow keys for walking.
         // (Q, W, E and Enter are handled in the overlay.)
@@ -547,6 +570,35 @@ export class TestRoom extends Scene
         };
     }
 
+    // The player fell into the water: one life point is lost.
+    // With life left, the player comes back at the water's edge, like before.
+    // Without life left, the player blacks out (see blackOut).
+    fellIntoWater ()
+    {
+        this.life = Math.max(this.life - WATER_DAMAGE, 0);
+
+        if (this.life > 0)
+        {
+            this.player.body.reset(this.respawnX, this.respawnY);
+            this.scene.get('Overlay').showLife(this.life);
+        }
+        else
+        {
+            this.blackOut();
+        }
+    }
+
+    // Out of life: the screen goes black, and the player wakes up in room 1
+    // with full life again. The screen slowly fades back in.
+    // (The camera moves to room 1 by itself in the next frame, see update.)
+    blackOut ()
+    {
+        this.player.body.reset(this.blackoutX, this.blackoutY);
+        this.life = MAX_LIFE;
+        this.scene.get('Overlay').showLife(this.life);
+        this.cameras.main.fadeIn(BLACKOUT_FADE, 0, 0, 0);
+    }
+
     // Placeholder "that didn't work" animation: the player wobbles a few times.
     failAction ()
     {
@@ -655,10 +707,10 @@ export class TestRoom extends Scene
         this.moveFishes(delta);
         this.updateFishing(delta);
 
-        // Fell completely off the bottom of the screen: start again at the water's edge.
+        // Fell completely off the bottom of the screen (= into the water): lose life points.
         if (this.player.body.top > this.mapHeight)
         {
-            this.player.body.reset(this.respawnX, this.respawnY);
+            this.fellIntoWater();
         }
 
         if (this.fishing)
