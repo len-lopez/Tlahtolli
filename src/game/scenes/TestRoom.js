@@ -144,6 +144,27 @@ const BACKREST_WIDTH = 3;
 const BACKREST_HEIGHT = 22;
 const COLOR_BACKREST = 0xb89b5e;
 
+// --- Marketplace counting game: objects lying around the merchants ---
+// Every time you walk into the Marketplace, each merchant gets 0 to MAX_OBJECTS_EACH
+// of every object type (picked at random), lying on the ground next to their mat.
+// They don't move. Leaving the Marketplace takes them away.
+// For now these are demo objects (A, B, C) in different colors.
+const MARKET_OBJECTS = [
+    { id: 'objectA', color: 0xe76f51 },
+    { id: 'objectB', color: 0x4cc9f0 },
+    { id: 'objectC', color: 0xf8f9fa }
+];
+const MAX_OBJECTS_EACH = 4;
+const OBJECT_SIZE = 4;   // each object is a small square, in pixels
+const OBJECT_GAP = 1;    // space between two objects lying next to / on top of each other
+// Where the objects lie: in two little piles, one on each side of the mat.
+// Each pile is OBJECT_PILE_COLUMNS wide and up to OBJECT_PILE_ROWS high,
+// starting OBJECT_PILE_DISTANCE pixels from the merchant's middle.
+// (3 x 2 on each side = 12 places = room for 4 of each of the 3 types.)
+const OBJECT_PILE_COLUMNS = 3;
+const OBJECT_PILE_ROWS = 2;
+const OBJECT_PILE_DISTANCE = MAT_WIDTH / 2 + 3;
+
 // --- Lake of Colors: flowering bushes and trees (to look at and inspect with Itta; you walk through them) ---
 // col   = the tile column of the plant's middle, counted from the Lake's left edge
 //         (the water starts at column 16).
@@ -303,6 +324,16 @@ const SLEEP_Z_EVERY = 600;
 function randomBetween (min, max)
 {
     return Math.floor(min + Math.random() * (max - min + 1));
+}
+
+// Mixes up the order of a list (changes the list itself).
+function shuffle (list)
+{
+    for (let i = list.length - 1; i > 0; i--)
+    {
+        const j = randomBetween(0, i);
+        [ list[i], list[j] ] = [ list[j], list[i] ];
+    }
 }
 
 // Rooms can have different widths now (the Marketplace is two screens wide).
@@ -475,6 +506,9 @@ export class TestRoom extends Scene
         // No fish at the start: they are made every time you walk into the water room.
         this.fishes = [];
 
+        // Same for the counting objects: made every time you walk into the Marketplace.
+        this.marketObjects = [];
+
         // The left, right and top edges of the whole map (all rooms together) are walls.
         // The bottom edge is open, so the player can fall off the screen.
         this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
@@ -515,12 +549,17 @@ export class TestRoom extends Scene
         this.cameras.main.startFollow(this.player, true);
 
         // The room the player is in right now (its number in the ROOMS list).
-        // The camera is kept inside that room, and if it's the Lake, the fish are made.
+        // The camera is kept inside that room. If it's the Lake, the fish are made;
+        // if it's the Marketplace, the counting objects.
         this.currentRoom = startRoom;
         this.keepCameraInRoom(startRoom);
         if (startRoom === this.waterRoom)
         {
             this.spawnFishes();
+        }
+        if (startRoom === 0)
+        {
+            this.spawnMarketObjects();
         }
 
         // Where the player wakes up after blacking out: Home,
@@ -923,7 +962,19 @@ export class TestRoom extends Scene
         {
             // The NPC's speech animation, and the dialogue box with its line.
             this.speechAnimation(npc.box, 0);
-            this.scene.get('Overlay').openDialogue(npcText[npc.type].line);
+            const overlay = this.scene.get('Overlay');
+
+            if (npc.type === 'judge')
+            {
+                // The leader first says who he is, then asks for help surveying the
+                // merchandise (paid in cacao). Yes or no: for now, both just close the box.
+                overlay.openDialogue(npcText.judge.line, () => {
+                    overlay.openQuestion(npcText.judge.request, () => {}, () => {});
+                });
+                return;
+            }
+
+            overlay.openDialogue(npcText[npc.type].line);
             return;
         }
 
@@ -1604,6 +1655,58 @@ export class TestRoom extends Scene
         }
     }
 
+    // Makes a new set of counting objects around every merchant in the Marketplace:
+    // 0 to MAX_OBJECTS_EACH of each type (MARKET_OBJECTS), picked at random.
+    // They lie in two little piles, one on each side of the merchant's mat, all mixed up.
+    // The lowest row is filled first, so nothing floats in the air.
+    spawnMarketObjects ()
+    {
+        this.npcs.filter((npc) => npc.type === 'merchant').forEach((npc) => {
+            // Which objects this merchant gets, e.g. [ A, A, B, C, C, C ], then shuffled.
+            const objects = [];
+            MARKET_OBJECTS.forEach((type) => {
+                const amount = randomBetween(0, MAX_OBJECTS_EACH);
+                for (let i = 0; i < amount; i++)
+                {
+                    objects.push(type);
+                }
+            });
+            shuffle(objects);
+
+            // All the places in the two piles, in the order they get filled:
+            // bottom row first, and within a row the places closest to the mat first,
+            // taking turns between the left and the right pile.
+            const places = [];
+            const pitch = OBJECT_SIZE + OBJECT_GAP;
+            for (let row = 0; row < OBJECT_PILE_ROWS; row++)
+            {
+                for (let col = 0; col < OBJECT_PILE_COLUMNS; col++)
+                {
+                    const away = OBJECT_PILE_DISTANCE + col * pitch + OBJECT_SIZE / 2;
+                    places.push({ x: -away, row });
+                    places.push({ x: away, row });
+                }
+            }
+
+            const x = npc.box.x;
+            const ground = this.groundTopAt(x);
+            objects.forEach((type, i) => {
+                const place = places[i];
+                const y = ground - OBJECT_SIZE / 2 - place.row * pitch;
+                const box = this.add.rectangle(x + place.x, y, OBJECT_SIZE, OBJECT_SIZE, type.color)
+                    .setDepth(-1);
+                this.marketObjects.push({ box, id: type.id });
+            });
+        });
+    }
+
+    // Takes all counting objects away.
+    removeMarketObjects ()
+    {
+        this.marketObjects.forEach((object) => object.box.destroy());
+        this.marketObjects = [];
+    }
+
     // Takes all fish away.
     removeFishes ()
     {
@@ -1734,6 +1837,13 @@ export class TestRoom extends Scene
             if (room === this.waterRoom)
             {
                 this.spawnFishes();
+            }
+
+            // The same for the counting objects in the Marketplace (room 0).
+            this.removeMarketObjects();
+            if (room === 0)
+            {
+                this.spawnMarketObjects();
             }
         }
     }

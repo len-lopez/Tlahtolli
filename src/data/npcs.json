@@ -6,6 +6,7 @@
     },
     "judge": {
         "line": { "nah": "Tianquizpan nitlayacanqui.", "en": "I am the leader of the market." },
-        "inspect": { "nah": "Ca tianquizpan tlayacanqui.", "en": "It's the leader of the market." }
+        "inspect": { "nah": "Ca tianquizpan tlayacanqui.", "en": "It's the leader of the market." },
+        "request": { "nah": "(demo) Will you help me survey the merchandise? I'll pay you in cacao.", "en": "Will you help me survey the merchandise in the market? I'll pay you in cacao." }
     }
 }
