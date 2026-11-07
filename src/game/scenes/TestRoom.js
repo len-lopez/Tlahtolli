@@ -86,6 +86,12 @@ const WATER_DAMAGE = 1;
 // After blacking out: how long the screen takes to fade back in from black (milliseconds).
 const BLACKOUT_FADE = 1000;
 
+// --- Sleeping (Cochi) ---
+// How long the player sleeps and can't move, in milliseconds.
+const SLEEP_TIME = 3000;
+// How often a new "z" floats up while sleeping, in milliseconds.
+const SLEEP_Z_EVERY = 600;
+
 // A random whole number from min to max (both included).
 function randomBetween (min, max)
 {
@@ -172,6 +178,9 @@ export class TestRoom extends Scene
         // No "that didn't work" wobble running yet.
         this.failWobble = null;
 
+        // While sleeping: the lying-down player and the z-timer. null when awake.
+        this.sleep = null;
+
         // Remembered for fishing: the ground layer (to look up tiles) and where the ground starts.
         this.floor = floor;
         this.floorTop = floorTop;
@@ -252,7 +261,25 @@ export class TestRoom extends Scene
     // The action name comes from the word list (src/data/wordlist.json).
     doAction (action)
     {
-        if (action === 'jump')
+        // While sleeping, no power works.
+        if (this.sleep)
+        {
+            return;
+        }
+
+        if (action === 'sleep')
+        {
+            // Only on the ground, not in mid-air.
+            if (this.player.body.blocked.down)
+            {
+                this.fallAsleep();
+            }
+            else
+            {
+                this.failAction();
+            }
+        }
+        else if (action === 'jump')
         {
             // Only jump when standing on the floor, not in mid-air.
             if (this.player.body.blocked.down)
@@ -599,6 +626,76 @@ export class TestRoom extends Scene
         this.cameras.main.fadeIn(BLACKOUT_FADE, 0, 0, 0);
     }
 
+    // Cochi: the player lies down and sleeps for SLEEP_TIME, and can't move.
+    // Placeholder look: the standing rectangle is hidden and a lying one (wide instead of tall)
+    // is shown on the floor in its place. Little "z" letters float up from it.
+    fallAsleep ()
+    {
+        const body = this.player.body;
+
+        // Stop walking right away.
+        body.setVelocityX(0);
+
+        // Hide the standing player and its eye.
+        this.player.setVisible(false);
+        this.eye.setVisible(false);
+
+        // The lying player: same size and color, just turned on its side (24 wide, 12 high),
+        // lying on the floor where the player stood.
+        const lying = this.add.rectangle(this.player.x, body.bottom - 6, 24, 12, 0x2ecc71);
+
+        // A new "z" every SLEEP_Z_EVERY milliseconds, starting with one right away.
+        const zTimer = this.time.addEvent({
+            delay: SLEEP_Z_EVERY,
+            loop: true,
+            callback: () => this.floatZ(lying)
+        });
+        this.floatZ(lying);
+
+        // Wake up after SLEEP_TIME.
+        const wakeTimer = this.time.delayedCall(SLEEP_TIME, () => this.wakeUp());
+
+        this.sleep = { lying, zTimer, wakeTimer };
+    }
+
+    // One "z" appears above the sleeping player, floats up and fades away.
+    floatZ (lying)
+    {
+        const z = this.add.text(lying.x + 6, lying.y - 10, 'z', {
+            fontFamily: 'Arial',
+            fontSize: 10,
+            color: '#ffffff'
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: z,
+            x: z.x + 6,
+            y: z.y - 16,
+            alpha: 0,
+            duration: 1200,
+            onComplete: () => z.destroy()
+        });
+    }
+
+    // Sleep is over: the player stands up again with full life points.
+    wakeUp ()
+    {
+        if (!this.sleep)
+        {
+            return;
+        }
+
+        this.sleep.zTimer.remove();
+        this.sleep.lying.destroy();
+        this.sleep = null;
+
+        this.player.setVisible(true);
+        this.eye.setVisible(true);
+
+        this.life = MAX_LIFE;
+        this.scene.get('Overlay').showLife(this.life);
+    }
+
     // Placeholder "that didn't work" animation: the player wobbles a few times.
     failAction ()
     {
@@ -713,7 +810,12 @@ export class TestRoom extends Scene
             this.fellIntoWater();
         }
 
-        if (this.fishing)
+        if (this.sleep)
+        {
+            // While sleeping you can't walk.
+            this.player.body.setVelocityX(0);
+        }
+        else if (this.fishing)
         {
             // While the line is out you can't walk away.
             // (Enter pulls the line in early; see the overlay.)
