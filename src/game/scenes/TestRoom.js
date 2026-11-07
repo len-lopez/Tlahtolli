@@ -93,6 +93,15 @@ const ROOMS = [
     buildWaterRoomGrid() // 2 = Lake of Colors: right half is water
 ];
 
+// Where the player appears when arriving in each room (start, save file, Map):
+// the tile column, counted from the room's left edge. Same order as ROOMS.
+// The player always stands on the ground in that column.
+const ROOM_ARRIVAL = [
+    MARKET_WIDTH - 4, // Marketplace: bottom right, 4 tiles from its right edge
+    4,                // Empty Room: 4 tiles from the left edge
+    4                 // Lake of Colors: 4 tiles from the left edge
+];
+
 // The room where a new game starts, and where you wake up after blacking out:
 // the Empty Room.
 const START_ROOM = 1;
@@ -319,7 +328,7 @@ export class TestRoom extends Scene
         // --- Start room ---
         // A new game starts in the Empty Room.
         // After loading a save file, the player starts in the saved room instead,
-        // 4 tiles from the room's left edge, standing on the ground there.
+        // at that room's arrival spot (see ROOM_ARRIVAL), standing on the ground.
         // A save file without a room, or with a room that doesn't exist, starts in the Empty Room.
         let startRoom = START_ROOM;
         if (data && data.save)
@@ -456,7 +465,7 @@ export class TestRoom extends Scene
     }
 
     // For testing (from the Map in the menu): puts the player into another room,
-    // 4 tiles from its left edge, standing on the ground there.
+    // at its arrival spot (see ROOM_ARRIVAL), standing on the ground.
     // The camera and the fish follow by themselves in the next frame (see update).
     goToRoom (room)
     {
@@ -470,11 +479,10 @@ export class TestRoom extends Scene
     }
 
     // Where the player appears when arriving in a room (start, save file, Map):
-    // 4 tiles from the room's left edge, standing on the ground there.
-    // In the Marketplace that's up on the plateau.
+    // the column from ROOM_ARRIVAL, standing on the ground there.
     roomSpawn (room)
     {
-        const x = roomLeft(room) + 4 * TILE;
+        const x = roomLeft(room) + ROOM_ARRIVAL[room] * TILE;
         return { x, y: this.groundTopAt(x) - 12 }; // 12 = half the player's height
     }
 
