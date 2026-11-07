@@ -157,7 +157,7 @@ export class Overlay extends Scene
         // 'prompt'   = typing a word into a slot
         // 'fishing'  = the fishing line is out (no powers, no menu)
         // 'minigame' = a fish bit, q/w/e boxes are on screen
-        // 'reveal'   = catch failed, the boxes show the right order for a moment
+        // 'reveal'   = catch failed, the boxes and the whole word stay on screen for a moment
         // 'dialogue' = an NPC is talking, the dialogue box is open
         // 'trade'    = the shop window is open (buying with Cohua or selling with Namaca)
         this.mode = 'play';
