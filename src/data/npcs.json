@@ -16,6 +16,7 @@
         "line": { "nah": "(demo) I want to buy cloth.", "en": "I want to buy cloth." },
         "request": { "nah": "(demo) If you ask around the other merchants and find me the best price, I'll pay you a commission. Will you?", "en": "If you ask around the other merchants and find me the best price, I'll pay you a commission. Will you?" },
         "inspect": { "nah": "(demo) He seems to be looking for something.", "en": "He seems to be looking for something." },
+        "foundYet": { "nah": "(demo) Did you find a good price yet?", "en": "Did you find a good price yet?" },
         "whichLowest": { "nah": "(demo) Which one is the lowest price you found?", "en": "Which one is the lowest price you found?" },
         "paid": { "nah": "(demo) Very good! Here is your commission.", "en": "Very good! Here is your commission." },
         "thanks": { "nah": "(demo) Thank you for your help.", "en": "Thank you for your help." },
