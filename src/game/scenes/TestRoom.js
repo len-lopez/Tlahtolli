@@ -42,24 +42,26 @@ function buildWaterRoomGrid ()
 // --- Marketplace ---
 // Twice as wide as the screen (64 tiles).
 // Right half: flat ground, like the other rooms.
-// Left half: a staircase going up towards the left, to a flat plateau at the far left.
+// Left half: a smooth slope going up towards the left, to a flat plateau at the far left.
 // The plateau's top is 12 tiles above the bottom of the screen (2/3 of the 18-tile screen),
 // that is 7 tiles higher than the normal ground.
 const MARKET_WIDTH = ROOM_WIDTH * 2;
 const PLATEAU_WIDTH = 10;   // the plateau: the first 10 tiles from the left
 const PLATEAU_HEIGHT = 7;   // how many tiles higher than the normal ground
-const STEP_WIDTH = 3;       // each step of the staircase is 3 tiles wide and 1 tile high
+const SLOPE_WIDTH = 18;     // the slope: the 18 tiles right after the plateau
 
-// How many tiles higher than the normal ground the Marketplace is in this column.
-// Plateau = 7, then the steps 6, 5, 4, 3, 2, 1 (each 3 tiles wide), then 0 = normal ground.
+// The slope is not made of tiles (tiles can only make blocky steps).
+// What you SEE is a smooth brown triangle.
+// What you WALK ON is an invisible staircase under it, with very small steps:
+// SLOPE_STEP pixels high each. Steps that small are climbed by just walking into them,
+// so you don't have to jump. (Bigger steps would stop you like a wall.)
+const SLOPE_STEP = 2;
+
+// How many tiles higher than the normal ground the Marketplace's TILES are in this column:
+// the plateau is 7, everywhere else 0 (the slope is added on top, see makeSlope).
 function marketGroundHeight (col)
 {
-    if (col < PLATEAU_WIDTH)
-    {
-        return PLATEAU_HEIGHT;
-    }
-    const step = Math.floor((col - PLATEAU_WIDTH) / STEP_WIDTH) + 1;
-    return Math.max(PLATEAU_HEIGHT - step, 0);
+    return col < PLATEAU_WIDTH ? PLATEAU_HEIGHT : 0;
 }
 
 function buildMarketplaceGrid ()
@@ -262,6 +264,9 @@ export class TestRoom extends Scene
 
         // The player stands on the floor instead of falling through it.
         this.physics.add.collider(this.player, floor);
+
+        // ...and on the Marketplace slope.
+        this.physics.add.collider(this.player, this.makeSlope(floorTop));
 
         // Which way the player is looking: 1 = right, -1 = left.
         // Changes whenever you walk left or right.
@@ -476,6 +481,47 @@ export class TestRoom extends Scene
 
         const spot = this.roomSpawn(room);
         this.player.body.reset(spot.x, spot.y);
+    }
+
+    // Makes the Marketplace slope, from the plateau's edge down to the normal ground.
+    // floorTop = where the normal ground starts (in pixels from the top).
+    // Returns the invisible steps, so the player can be made to stand on them.
+    makeSlope (floorTop)
+    {
+        const left = roomLeft(0) + PLATEAU_WIDTH * TILE;  // where the slope starts (top)
+        const width = SLOPE_WIDTH * TILE;
+        const height = PLATEAU_HEIGHT * TILE;             // from the ground up to the plateau
+
+        // What you see: a brown triangle, same color as the floor tiles.
+        // Its corners: top left (at the plateau's edge), bottom right, bottom left.
+        // (Depth -1 = drawn behind everything else, so it never covers the player's feet.)
+        const look = this.add.graphics().setDepth(-1);
+        look.fillStyle(0x8b5a2b);
+        look.fillTriangle(
+            left, floorTop - height,
+            left + width, floorTop,
+            left, floorTop
+        );
+
+        // What you walk on: invisible blocks side by side, each SLOPE_STEP pixels
+        // lower than the one to its left. Together they follow the triangle's slanted side.
+        const count = height / SLOPE_STEP;  // how many steps
+        const stepWidth = width / count;
+        const steps = [];
+
+        for (let i = 0; i < count; i++)
+        {
+            const stepHeight = height - i * SLOPE_STEP;
+            const block = this.add.rectangle(left + i * stepWidth, floorTop - stepHeight, stepWidth, stepHeight)
+                .setOrigin(0, 0)
+                .setVisible(false);
+
+            // true = a "static" body: solid, but it never moves or falls.
+            this.physics.add.existing(block, true);
+            steps.push(block);
+        }
+
+        return steps;
     }
 
     // Where the player appears when arriving in a room (start, save file, Map):
