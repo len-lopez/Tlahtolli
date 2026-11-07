@@ -2,9 +2,15 @@
     "main": [
         { "id": "profile", "label": "Profile" },
         { "id": "bag", "label": "Bag" },
+        { "id": "map", "label": "Map" },
         { "id": "words", "label": "Word List" },
         { "id": "settings", "label": "Settings" },
         { "id": "save", "label": "Save" }
+    ],
+    "map": [
+        "Empty Room",
+        "Lake of Colors",
+        "Marketplace"
     ],
     "save": [
         { "id": "download", "label": "Download save file" },

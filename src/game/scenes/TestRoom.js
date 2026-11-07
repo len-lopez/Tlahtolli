@@ -39,11 +39,16 @@ function buildWaterRoomGrid ()
     return grid;
 }
 
-// All rooms, from left to right. Room 2 lies to the right of room 1.
+// All rooms, from left to right. The number in front is the room's place in this list.
 const ROOMS = [
-    buildRoomGrid(),     // room 1
-    buildWaterRoomGrid() // room 2: right half is water
+    buildRoomGrid(),     // 0 = Marketplace (empty for now)
+    buildRoomGrid(),     // 1 = Empty Room (where the game starts)
+    buildWaterRoomGrid() // 2 = Lake of Colors: right half is water
 ];
+
+// The room where a new game starts, and where you wake up after blacking out:
+// the Empty Room.
+const START_ROOM = 1;
 
 // Fish: small colored rectangles (10 x 5 pixels) in these colors.
 // The name must match a "meaning" in src/data/fishing-words.json (upper/lower case doesn't matter).
@@ -150,8 +155,10 @@ export class TestRoom extends Scene
         floor.setCollision([ FLOOR ]);
 
         // The player: a small green rectangle (12 x 24 pixels).
+        // It starts 4 tiles from the left edge of the start room (the Empty Room).
         const floorTop = (ROOM_HEIGHT - FLOOR_ROWS) * TILE;
-        this.player = this.add.rectangle(4 * TILE, floorTop - 12, 12, 24, 0x2ecc71);
+        const roomPixelWidth = ROOM_WIDTH * TILE;
+        this.player = this.add.rectangle(START_ROOM * roomPixelWidth + 4 * TILE, floorTop - 12, 12, 24, 0x2ecc71);
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
 
@@ -208,8 +215,8 @@ export class TestRoom extends Scene
             bottom: floorTop + FLOOR_ROWS * TILE - 5
         };
 
-        // Which room the water is in (0 = room 1, 1 = room 2).
-        this.waterRoom = Math.floor(waterLeft / (ROOM_WIDTH * TILE));
+        // Which room the water is in (its number in the ROOMS list, so 2 = Lake of Colors).
+        this.waterRoom = Math.floor(waterLeft / roomPixelWidth);
 
         // No fish at the start: they are made every time you walk into the water room.
         this.fishes = [];
@@ -220,24 +227,43 @@ export class TestRoom extends Scene
         this.physics.world.setBoundsCollision(true, true, true, false);
         this.mapHeight = map.heightInPixels;
 
-        // The room the player is in right now (0 = room 1, 1 = room 2).
-        this.currentRoom = 0;
-        this.cameras.main.setScroll(0, 0);
-
         // --- Start room ---
-        // After loading a save file, the player starts in the saved room,
-        // at the same spot as in room 1 (4 tiles from the room's left edge).
-        // The camera and the fish follow by themselves in the next frame (see update).
-        // A save file without a room, or with a room that doesn't exist, starts in room 1.
-        const savedRoom = data && data.save ? data.save.room : 0;
-        if (Number.isInteger(savedRoom) && savedRoom > 0 && savedRoom < ROOMS.length)
+        // A new game starts in the Empty Room.
+        // After loading a save file, the player starts in the saved room instead,
+        // at the same spot (4 tiles from the room's left edge).
+        // A save file without a room, or with a room that doesn't exist, starts in the Empty Room.
+        let startRoom = START_ROOM;
+        if (data && data.save)
         {
-            this.player.body.reset(savedRoom * ROOM_WIDTH * TILE + 4 * TILE, floorTop - 12);
+            let savedRoom = data.save.room;
+
+            // Save files from before the Marketplace was added (version 1 and 2)
+            // counted the Empty Room as 0 and the Lake as 1. Now the Marketplace is 0,
+            // so everything moved one place to the right: add 1 to old room numbers.
+            if (data.save.version < 3 && Number.isInteger(savedRoom))
+            {
+                savedRoom += 1;
+            }
+
+            if (Number.isInteger(savedRoom) && savedRoom >= 0 && savedRoom < ROOMS.length)
+            {
+                startRoom = savedRoom;
+                this.player.body.reset(startRoom * roomPixelWidth + 4 * TILE, floorTop - 12);
+            }
         }
 
-        // Where the player wakes up after blacking out: room 1 (the first room without water),
+        // The room the player is in right now (its number in the ROOMS list).
+        // The camera shows that room right away, and if it's the Lake, the fish are made.
+        this.currentRoom = startRoom;
+        this.cameras.main.setScroll(startRoom * roomPixelWidth, 0);
+        if (startRoom === this.waterRoom)
+        {
+            this.spawnFishes();
+        }
+
+        // Where the player wakes up after blacking out: the Empty Room,
         // at the same spot where the game starts.
-        this.blackoutX = 4 * TILE;
+        this.blackoutX = START_ROOM * roomPixelWidth + 4 * TILE;
         this.blackoutY = floorTop - 12;
 
         // --- Life points (Yollotl) ---
@@ -248,6 +274,11 @@ export class TestRoom extends Scene
         this.life = Number.isInteger(savedLife) && savedLife >= 1 && savedLife <= MAX_LIFE
             ? savedLife
             : MAX_LIFE;
+
+        // --- Cacao beans (the money) ---
+        // Everyone starts with 0. There's no way to get beans yet.
+        // (Not in the save file yet either, so loading a save also gives 0.)
+        this.beans = 0;
 
         // Keyboard: arrow keys for walking.
         // (Q, W, E and Enter are handled in the overlay.)
@@ -615,9 +646,9 @@ export class TestRoom extends Scene
         }
     }
 
-    // Out of life: the screen goes black, and the player wakes up in room 1
+    // Out of life: the screen goes black, and the player wakes up in the Empty Room
     // with full life again. The screen slowly fades back in.
-    // (The camera moves to room 1 by itself in the next frame, see update.)
+    // (The camera moves to the Empty Room by itself in the next frame, see update.)
     blackOut ()
     {
         this.player.body.reset(this.blackoutX, this.blackoutY);
@@ -849,6 +880,7 @@ export class TestRoom extends Scene
 
         // Which room is the player in? Each room is one screen wide.
         const roomPixelWidth = ROOM_WIDTH * TILE;
+        // (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors)
         const room = Math.floor(this.player.x / roomPixelWidth);
 
         // When the player walks into another room, the camera jumps there.
