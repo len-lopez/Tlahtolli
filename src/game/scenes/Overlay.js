@@ -103,6 +103,10 @@ export class Overlay extends Scene
         // The fishing minigame while it's running, or null.
         this.minigame = null;
 
+        // The last q/w/e key used for a power, and the key the fishing line was cast with.
+        this.lastUsedSlot = null;
+        this.fishingSlot = null;
+
         // --- q / w / e slots on the left edge ---
         // Each slot is either empty (word = null) or used (word = a word from the list).
         this.slots = {};
@@ -141,7 +145,10 @@ export class Overlay extends Scene
         const enterY = h - 14;
 
         const enterBox = this.add.rectangle(enterX, enterY, 24, 16, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
-        this.add.text(enterX, enterY, '↵', TEXT_STYLE).setOrigin(0.5);
+        const enterSign = this.add.text(enterX, enterY, '↵', TEXT_STYLE).setOrigin(0.5);
+
+        // Box and arrow go into one container, so they can be hidden together (while fishing).
+        this.enterButton = this.add.container(0, 0, [ enterBox, enterSign ]);
 
         // Clicking the Enter symbol does the same as pressing Enter.
         enterBox.setInteractive({ useHandCursor: true });
@@ -231,9 +238,9 @@ export class Overlay extends Scene
 
         if (this.mode === 'fishing')
         {
-            // Line is out: q/w/e powers and the menu can't be used,
-            // but Enter pulls the line in early (cancel).
-            if (event.key === 'Enter')
+            // Line is out: the powers and the menu can't be used,
+            // but the key that cast the line pulls it in early (cancel).
+            if (event.key.toLowerCase() === this.fishingSlot)
             {
                 this.scene.get('TestRoom').stopFishing();
             }
@@ -309,6 +316,9 @@ export class Overlay extends Scene
 
         if (entry && entry.action)
         {
+            // Remember which key it was: if this throws out the fishing line,
+            // the same key pulls it in again (see startFishing).
+            this.lastUsedSlot = letter;
             this.scene.get('TestRoom').doAction(entry.action);
         }
     }
@@ -573,6 +583,9 @@ export class Overlay extends Scene
     {
         this.mode = 'fishing';
         this.qweButtons.setVisible(false);
+
+        // The key the line was cast with (q, w or e); pressing it again pulls the line in.
+        this.fishingSlot = this.lastUsedSlot;
     }
 
     // Called by the room when the line is pulled in.
@@ -816,18 +829,20 @@ export class Overlay extends Scene
 
     // Called every frame: runs the minigame timer.
     // The word next to the Enter symbol, depending on what the player is doing:
-    // walking around = "menu", typing a word = "confirm", menu open = "close",
-    // line out = "cancel". Otherwise (fish biting, after a failed catch)
-    // Enter does nothing, so there's no word then.
+    // walking around = "menu", typing a word = "confirm", menu open = "close".
+    // While fishing (line out, fish biting, after a failed catch) Enter does nothing,
+    // so the Enter symbol and its word are hidden then.
     updateEnterLabel ()
     {
         const words = {
             play: menuText.buttons.menu,
             prompt: menuText.buttons.confirm,
-            menu: menuText.buttons.close,
-            fishing: menuText.buttons.cancel
+            menu: menuText.buttons.close
         };
         const word = words[this.mode] ?? '';
+
+        const fishing = [ 'fishing', 'minigame', 'reveal' ].includes(this.mode);
+        this.enterButton.setVisible(!fishing);
 
         if (this.enterLabel.text !== word)
         {
