@@ -1,6 +1,7 @@
 import { Scene, Geom } from 'phaser';
 import wordList from '../../data/wordlist.json';
 import fishingWords from '../../data/fishing-words.json';
+import numberWords from '../../data/numbers.json';
 import menuText from '../../data/menu.json';
 import items from '../../data/items.json';
 import { createSave, downloadSave, pickSaveFile } from '../save.js';
@@ -71,6 +72,25 @@ const SHAKE_TIME = 300;
 const BOX_WIDTH = 64;
 const BOX_HEIGHT = 32;
 const BOX_GAP = 10;
+
+// The beginning of a text, up to and including its n-th letter (spaces don't count).
+// Example: firstLetters("Mahtlactli once", 12) -> "Mahtlactli on"
+function firstLetters (text, n)
+{
+    let letters = 0;
+    for (let i = 0; i < text.length; i++)
+    {
+        if (letters === n)
+        {
+            return text.slice(0, i);
+        }
+        if (text[i] !== ' ')
+        {
+            letters++;
+        }
+    }
+    return text;
+}
 
 // True if two lists have the same things in the same order.
 function sameOrder (a, b)
@@ -1353,11 +1373,45 @@ export class Overlay extends Scene
             return false;
         }
 
+        const room = this.scene.get('TestRoom');
+        this.startWordGame(entry, fishingWords, {
+            onResult: (success, word) => room.fishingResult(success, word)
+        });
+        return true;
+    }
+
+    // Called by the room when the marketplace leader asks how many there are.
+    // number = the right answer (1 to 20); its word is looked up in src/data/numbers.json.
+    // onResult(success, word) = called right when the answer was given (or time ran out).
+    // afterReveal() = only after a wrong answer: called when the boxes have disappeared again.
+    // Returns false if there's no word for that number.
+    startNumberGame (number, onResult, afterReveal)
+    {
+        const entry = numberWords.find((e) => e.number === number);
+        if (!entry)
+        {
+            return false;
+        }
+
+        // lockWalking: the player can't walk away while answering (or right after a wrong answer).
+        // hideWrong: after a wrong answer the right word is NOT shown (it would give away
+        // the number before counting again).
+        this.startWordGame(entry, numberWords, { onResult, afterReveal, lockWalking: true, hideWrong: true });
+        return true;
+    }
+
+    // The word minigame (used for fishing and for the leader's counting question):
+    // the player has to come up with the word of "entry" (one entry of a word list,
+    // like src/data/fishing-words.json), in one of three ways (see chooseMinigame).
+    // words = the whole word list (the color choice takes its two wrong answers from it).
+    // options = { onResult, afterReveal, lockWalking } (see startNumberGame).
+    startWordGame (entry, words, options)
+    {
         const w = this.scale.width;
         const h = this.scale.height;
 
         // Which minigame this time: 'typing', 'order' or 'choice' (see chooseMinigame).
-        const kind = this.chooseMinigame(entry);
+        const kind = this.chooseMinigame(entry, words);
 
         // The word in lowercase, cut into three parts.
         // If the word list says how to split the word ("parts"), use that;
@@ -1383,7 +1437,7 @@ export class Overlay extends Scene
         else if (kind === 'choice')
         {
             // The fish's color word and two other color words picked at random, all mixed up.
-            const others = shuffle(fishingWords.filter((e) => e !== entry)).slice(0, 2);
+            const others = shuffle(words.filter((e) => e !== entry)).slice(0, 2);
             // Written as in the word list, with a capital letter (e.g. "Chichiltic").
             labels = shuffle([ entry, ...others ]).map((e) => e.word);
         }
@@ -1391,6 +1445,16 @@ export class Overlay extends Scene
         // Everything on screen for the minigame goes into one container,
         // so it can be removed in one go.
         const ui = this.add.container(0, 0);
+
+        // How wide the q/w/e boxes are: normally BOX_WIDTH, but wider if a word
+        // doesn't fit (long number words like "mahtlactli onnahui").
+        // Measured by writing each word once and looking at its width.
+        let boxWidth = BOX_WIDTH;
+        labels.forEach((label) => {
+            const measure = this.add.text(0, 0, label, TEXT_STYLE);
+            boxWidth = Math.max(boxWidth, Math.ceil(measure.width) + 12);
+            measure.destroy();
+        });
 
         // --- Three boxes for q, w, e, side by side in the middle of the screen ---
         // (Typing: one wide box in the middle instead, see below.)
@@ -1402,11 +1466,11 @@ export class Overlay extends Scene
             // Each box (rectangle + key letter + word part or color word) is its own
             // little container, so all three pieces move together when the box shakes.
             // slot 0, 1, 2  ->  left, middle, right
-            const holder = this.add.container(this.boxSlotX(i), boxY);
+            const holder = this.add.container(this.boxSlotX(i, boxWidth), boxY);
 
-            const box = this.add.rectangle(0, 0, BOX_WIDTH, BOX_HEIGHT, COLOR_EMPTY)
+            const box = this.add.rectangle(0, 0, boxWidth, BOX_HEIGHT, COLOR_EMPTY)
                 .setStrokeStyle(1, 0xffffff);
-            const keyLabel = this.add.text(-BOX_WIDTH / 2 + 3, -BOX_HEIGHT / 2 + 1, letter,
+            const keyLabel = this.add.text(-boxWidth / 2 + 3, -BOX_HEIGHT / 2 + 1, letter,
                 { ...TEXT_STYLE, fontSize: 9 });
             const partLabel = this.add.text(0, 2, labels[i], TEXT_STYLE).setOrigin(0.5);
 
@@ -1421,7 +1485,7 @@ export class Overlay extends Scene
         let typedLabel = null;
         if (kind === 'typing')
         {
-            const holder = this.add.container(this.boxSlotX(1), boxY);
+            const holder = this.add.container(this.boxSlotX(1, boxWidth), boxY);
             const box = this.add.rectangle(0, 0, TYPING_BOX_WIDTH, BOX_HEIGHT, COLOR_EMPTY)
                 .setStrokeStyle(1, 0xffffff);
             typedLabel = this.add.text(0, 0, '_', TEXT_STYLE).setOrigin(0.5);
@@ -1455,9 +1519,14 @@ export class Overlay extends Scene
 
         this.minigame = {
             kind,                     // 'typing', 'order' or 'choice'
-            entry,                    // the word from src/data/fishing-words.json
+            entry,                    // the word from the word list
             ui,
             boxes,
+            boxWidth,                 // how wide the q/w/e boxes are
+            onResult: options.onResult,
+            afterReveal: options.afterReveal ?? null,
+            lockWalking: options.lockWalking ?? false,
+            hideWrong: options.hideWrong ?? false,
             parts,
             spelled,                  // the text above the boxes that fills up
             next: 0,                  // which part has to be pressed next (0, 1 or 2)
@@ -1476,7 +1545,6 @@ export class Overlay extends Scene
         // (q/w/e are the minigame boxes now). The circles come back normal afterwards.
         this.qweButtons.setVisible(false);
         this.restoreSlots();
-        return true;
     }
 
     // A key press during the minigame.
@@ -1534,8 +1602,10 @@ export class Overlay extends Scene
         // Spell out the word up to here. The letters are taken from the word itself
         // (not the lowercase parts), so it looks exactly like the finished word,
         // e.g. "Chi", then "Chichil", then "Chichiltic".
-        const lettersSoFar = game.parts.slice(0, game.next).join('').length;
-        game.spelled.setText(game.entry.word.slice(0, lettersSoFar));
+        // Spaces don't count as letters: for "Mahtlactli once" with the parts
+        // "mahtlactli", "on", "ce", the second step shows "Mahtlactli on".
+        const lettersSoFar = game.parts.slice(0, game.next).join('').replace(/ /g, '').length;
+        game.spelled.setText(firstLetters(game.entry.word, lettersSoFar));
 
         if (game.next === game.parts.length)
         {
@@ -1544,9 +1614,10 @@ export class Overlay extends Scene
     }
 
     // Left/right position of box slot 0, 1 or 2 on the screen.
-    boxSlotX (slot)
+    // boxWidth = how wide the boxes are (normally that of the running minigame).
+    boxSlotX (slot, boxWidth = this.minigame ? this.minigame.boxWidth : BOX_WIDTH)
     {
-        return this.scale.width / 2 + (slot - 1) * (BOX_WIDTH + BOX_GAP);
+        return this.scale.width / 2 + (slot - 1) * (boxWidth + BOX_GAP);
     }
 
     // A key press during the typing minigame: letters are typed, Backspace deletes
@@ -1581,7 +1652,8 @@ export class Overlay extends Scene
     // Decides which minigame comes for this word: 'typing', 'order' or 'choice'.
     // First a chance for typing (see typingChance); if it's not typing,
     // one of the two easy ones, picked with MINIGAME_CHANCES.
-    chooseMinigame (entry)
+    // words = the whole word list the word comes from.
+    chooseMinigame (entry, words)
     {
         const progress = this.scene.get('TestRoom').progress;
 
@@ -1595,11 +1667,20 @@ export class Overlay extends Scene
             return 'typing';
         }
 
+        // The word order puzzle needs a word that can be cut into three parts:
+        // either the word list says how ("parts"), or it has at least 3 letters.
+        // (A very short word like "ce" can't; it always gets the choice.)
+        const canOrder = Boolean(entry.parts) || entry.word.replace(/ /g, '').length >= 3;
+
         // The color choice needs at least two other words to choose from;
         // if the word list is too short, it's always the word order puzzle.
-        if (fishingWords.length < 3)
+        if (words.length < 3)
         {
             return 'order';
+        }
+        if (!canOrder)
+        {
+            return 'choice';
         }
         return pickByChance(MINIGAME_CHANCES);
     }
@@ -1634,8 +1715,12 @@ export class Overlay extends Scene
     {
         // Caught or not: the whole word appears for a moment, in the same place
         // as the spelled-out part (which is hidden, so the two don't overlap).
+        // (Not after a wrong answer if hideWrong is set: the leader's counting question.)
         this.minigame.spelled.setVisible(false);
-        this.showFishWord(this.minigame.entry);
+        if (success || !this.minigame.hideWrong)
+        {
+            this.showFishWord(this.minigame.entry);
+        }
 
         // The word that was asked, so the room can count the answer.
         const word = this.minigame.entry.word;
@@ -1646,30 +1731,37 @@ export class Overlay extends Scene
             setReminder(this.scene.get('TestRoom').progress, word, true);
         }
 
+        const game = this.minigame;
+
         if (success)
         {
             this.closeMinigame();
-            this.scene.get('TestRoom').fishingResult(true, word);
+            game.onResult(true, word);
             return;
         }
 
         // Failed: the boxes stay where they are for a moment, with the whole word above them.
-        // q/w/e powers and the menu stay locked until it's over, but you can walk.
-        const game = this.minigame;
+        // q/w/e powers and the menu stay locked until it's over, but you can walk
+        // (except in the leader's counting question, see lockWalking).
         this.mode = 'reveal';
 
         // Wrong box (already red) or time ran out: all boxes shake quickly.
         this.shakeBoxes();
 
-        // When the display is over: remove it and give the powers back.
+        // When the display is over: remove it and give the powers back,
+        // then do whatever comes next (e.g. the leader says to count again).
         game.timers.push(this.time.delayedCall(REVEAL_TIME, () => {
             this.closeMinigame();
             this.mode = 'play';
             this.qweButtons.setVisible(true);
+            if (game.afterReveal)
+            {
+                game.afterReveal();
+            }
         }));
 
-        // The line is pulled in right away and the fish gets away.
-        this.scene.get('TestRoom').fishingResult(false, word);
+        // Tell the room right away (fishing: the line is pulled in and the fish gets away).
+        game.onResult(false, word);
     }
 
     // All three boxes shake quickly left and right: "that was wrong".

@@ -168,6 +168,13 @@ const OBJECT_PILE_COLUMNS = 3;
 const OBJECT_PILE_ROWS = 2;
 const OBJECT_PILE_DISTANCE = MAT_WIDTH / 2 + 3;
 
+// --- The leader's counting task ---
+// How many cacao beans the leader pays for each right answer.
+const COUNTING_PAY = 5;
+// After this many wrong answers (while you stay in the Marketplace), the leader thinks
+// you're trying to deceive him and shoos you away until you leave and come back.
+const COUNTING_MAX_WRONG = 3;
+
 // --- Lake of Colors: flowering bushes and trees (to look at and inspect with Itta; you walk through them) ---
 // col   = the tile column of the plant's middle, counted from the Lake's left edge
 //         (the water starts at column 16).
@@ -512,9 +519,13 @@ export class TestRoom extends Scene
         // Same for the counting objects: made every time you walk into the Marketplace.
         this.marketObjects = [];
 
-        // The leader's counting task while it's running: { id, total }
-        // (which object to count, and how many there are). null when there is none.
-        this.marketQuest = null;
+        // The leader's counting task (all of this starts over when you leave the Marketplace):
+        // marketQuest  = the task while it's running: { id, total }
+        //                (which object to count, and how many there are). null when there is none.
+        // marketDone   = the object types already counted right, e.g. [ 'objectB' ].
+        // marketWrong  = how many wrong answers so far.
+        // leaderAngry  = true after COUNTING_MAX_WRONG wrong answers: he shoos you away.
+        this.resetMarketTask();
 
         // The left, right and top edges of the whole map (all rooms together) are walls.
         // The bottom edge is open, so the player can fall off the screen.
@@ -988,45 +999,139 @@ export class TestRoom extends Scene
         this.talking = { bubble, timer };
     }
 
+    // Forgets everything about the leader's counting task (when leaving the Marketplace).
+    resetMarketTask ()
+    {
+        this.marketQuest = null;
+        this.marketDone = [];
+        this.marketWrong = 0;
+        this.leaderAngry = false;
+    }
+
     // Talking to the marketplace leader (the counting task).
-    // - No task yet: he says who he is, then asks for help surveying the merchandise
-    //   (paid in cacao). Yes: he picks one object type and tells you to count all of them
-    //   in the market and come back; the task starts. No: the box just closes.
-    // - Task running: he first asks whether you counted them all. Yes or no:
-    //   for now, both just close the box (the task keeps running).
+    // - After too many wrong answers: he only shoos you away.
+    // - Task running: he first asks whether you counted them all.
+    //   Yes: he asks how many there are (the number minigame). No: the box just closes.
+    // - You already counted one type right (and stayed in the room): he asks you to do the
+    //   same for another type. Once all of them are done, he only thanks you.
+    // - Otherwise: he says who he is, then asks for help surveying the merchandise
+    //   (paid in cacao). Yes: the task starts. No: the box just closes.
     talkToLeader (overlay)
     {
-        if (this.marketQuest)
+        const text = npcText.judge;
+
+        if (this.leaderAngry)
         {
-            overlay.openQuestion(npcText.judge.countedAll, () => {}, () => {});
+            overlay.openDialogue(text.goAway);
             return;
         }
 
-        overlay.openDialogue(npcText.judge.line, () => {
-            overlay.openQuestion(npcText.judge.request, () => this.startMarketQuest(overlay), () => {});
+        if (this.marketQuest)
+        {
+            overlay.openQuestion(text.countedAll, () => this.askHowMany(overlay), () => {});
+            return;
+        }
+
+        if (this.marketDone.length > 0)
+        {
+            if (this.marketQuestChoices().length === 0)
+            {
+                overlay.openDialogue(text.allDone);
+                return;
+            }
+            overlay.openQuestion(text.requestAgain, () => this.startMarketQuest(overlay), () => {});
+            return;
+        }
+
+        overlay.openDialogue(text.line, () => {
+            overlay.openQuestion(text.request, () => this.startMarketQuest(overlay), () => {});
         });
     }
 
-    // Starts the counting task: picks one of the object types that are lying around
-    // right now, remembers how many there are in the whole market,
+    // The object types the leader can still ask for: not counted yet,
+    // and there is at least one of them lying around.
+    // Each as { id, total } (total = how many there are in the whole market).
+    marketQuestChoices ()
+    {
+        return MARKET_OBJECTS
+            .filter((type) => !this.marketDone.includes(type.id))
+            .map((type) => ({
+                id: type.id,
+                total: this.marketObjects.filter((object) => object.id === type.id).length
+            }))
+            .filter((choice) => choice.total > 0);
+    }
+
+    // Starts the counting task: picks one of the object types that can still be asked for
+    // (see marketQuestChoices), remembers how many there are in the whole market,
     // and the leader says which one to count (its name goes into the gap in his sentence).
     startMarketQuest (overlay)
     {
-        const counts = MARKET_OBJECTS.map((type) => ({
-            id: type.id,
-            total: this.marketObjects.filter((object) => object.id === type.id).length
-        }));
-
-        // Only types there is at least one of (if there's none of anything, any type).
-        const present = counts.filter((count) => count.total > 0);
-        const pool = present.length > 0 ? present : counts;
-        const chosen = pool[randomBetween(0, pool.length - 1)];
+        const choices = this.marketQuestChoices();
+        if (choices.length === 0)
+        {
+            // Nothing (left) to count: he just thanks you.
+            overlay.openDialogue(npcText.judge.allDone);
+            return;
+        }
+        const chosen = choices[randomBetween(0, choices.length - 1)];
 
         // The task: which object, and the right answer (how many there are).
         this.marketQuest = { id: chosen.id, total: chosen.total };
 
         // 2 = use the plural form of the name ("all the ...").
         overlay.openDialogue(overlay.fillTemplate(npcText.judge.order, 2, marketObjectText[chosen.id]));
+    }
+
+    // The leader asks how many there are; when the box is closed, the number minigame starts
+    // (like fishing: put the parts in order, pick the right word, or type it).
+    askHowMany (overlay)
+    {
+        const quest = this.marketQuest;
+        const question = overlay.fillTemplate(npcText.judge.howMany, 2, marketObjectText[quest.id]);
+
+        overlay.openDialogue(question, () => {
+            overlay.startNumberGame(
+                quest.total,
+                (success, word) => this.countingResult(overlay, success, word),
+                () => this.afterWrongCount(overlay)
+            );
+        });
+    }
+
+    // The player answered the leader's "how many?" (success = right or wrong).
+    // Right: he pays COUNTING_PAY cacao beans, and that type is done.
+    // Wrong: one more wrong answer is counted (what he says comes in afterWrongCount,
+    // once the boxes are gone).
+    countingResult (overlay, success, word)
+    {
+        // Count the answer for this word (for this session and for the save file).
+        recordAnswer(this.progress, word, success);
+
+        if (success)
+        {
+            this.marketDone.push(this.marketQuest.id);
+            this.marketQuest = null;
+            this.beans += COUNTING_PAY;
+            overlay.showBeans(this.beans);
+            overlay.openDialogue(npcText.judge.paid);
+            return;
+        }
+
+        this.marketWrong += 1;
+        if (this.marketWrong >= COUNTING_MAX_WRONG)
+        {
+            // He doesn't believe you any more: the task is over until you come back.
+            this.leaderAngry = true;
+            this.marketQuest = null;
+        }
+    }
+
+    // After a wrong answer, once the boxes are gone: he tells you to count again,
+    // or, after too many wrong answers, asks if you're trying to deceive him.
+    afterWrongCount (overlay)
+    {
+        overlay.openDialogue(this.leaderAngry ? npcText.judge.deceive : npcText.judge.countAgain);
     }
 
     // Itta: look at what's in front of the player. No animation; a dialogue box opens.
@@ -1845,6 +1950,12 @@ export class TestRoom extends Scene
             // While an NPC is talking (dialogue box open) you can't walk away.
             this.player.body.setVelocityX(0);
         }
+        else if (this.scene.get('Overlay').minigame && this.scene.get('Overlay').minigame.lockWalking)
+        {
+            // While answering the leader's "how many?" (and right after a wrong answer)
+            // you can't walk away either.
+            this.player.body.setVelocityX(0);
+        }
         else if (this.cursors.left.isDown)
         {
             this.player.body.setVelocityX(-speed);
@@ -1892,7 +2003,7 @@ export class TestRoom extends Scene
             // The same for the counting objects in the Marketplace (room 0).
             // Leaving the Marketplace also cancels the leader's counting task.
             this.removeMarketObjects();
-            this.marketQuest = null;
+            this.resetMarketTask();
             if (room === 0)
             {
                 this.spawnMarketObjects();
