@@ -8,10 +8,19 @@
         "inspect": { "nah": "(demo) He is counting cacao beans.", "en": "He is counting cacao beans." },
         "sells": [ "michin" ]
     },
+    "reedCounter": {
+        "inspect": { "nah": "(demo) He is counting bundles of reeds.", "en": "He is counting bundles of reeds." },
+        "sells": [ "michin" ]
+    },
     "clothBuyer": {
         "line": { "nah": "(demo) I want to buy cloth.", "en": "I want to buy cloth." },
         "request": { "nah": "(demo) If you ask around the other merchants and find me the best price, I'll pay you a commission. Will you?", "en": "If you ask around the other merchants and find me the best price, I'll pay you a commission. Will you?" },
         "inspect": { "nah": "(demo) He seems to be looking for something.", "en": "He seems to be looking for something." },
+        "whichLowest": { "nah": "(demo) Which one is the lowest price you found?", "en": "Which one is the lowest price you found?" },
+        "paid": { "nah": "(demo) Very good! Here is your commission.", "en": "Very good! Here is your commission." },
+        "thanks": { "nah": "(demo) Thank you for your help.", "en": "Thank you for your help." },
+        "checkAgain": { "nah": "(demo) That doesn't sound right. Go and check again.", "en": "That doesn't sound right. Go and check again." },
+        "anotherDay": { "nah": "(demo) Hmm, maybe I'll look for cloth another day.", "en": "Hmm, maybe I'll look for cloth another day." },
         "sells": [ "michin" ]
     },
     "judge": {
