@@ -68,6 +68,8 @@ const COLOR_EMPTY = 0x333333;
 const COLOR_USED = 0x2e7d9a;
 const COLOR_EDITING = 0xf2c418; // outline of the q/w/e circle you're typing a word for
 const COLOR_GLOSS = '#f2c418';  // text color of glosses (English), so they stand out from Nahuatl
+const COLOR_BITE = '#ff5c5c';   // text color of "Quixtia" while a fish is biting
+const COLOR_CORRECT = 0x2e9a4a; // a minigame box turns this color when it's pressed in the right order
 
 const TEXT_STYLE = {
     fontFamily: 'Arial',
@@ -711,12 +713,13 @@ export class Overlay extends Scene
     }
 
     // Writes a clickable text in Nahuatl, or in English (in the gloss color).
+    // The Nahuatl is white, unless the text has its own color (gloss.color, e.g. Quixtia during a bite).
     showGlossText (textObject)
     {
         const { label, english: showEnglish } = textObject.gloss;
 
         textObject.setText(label ? (showEnglish ? english(label) : nahuatl(label)) : '');
-        textObject.setColor(showEnglish ? COLOR_GLOSS : TEXT_STYLE.color);
+        textObject.setColor(showEnglish ? COLOR_GLOSS : (textObject.gloss.color ?? TEXT_STYLE.color));
 
         // The clickable area is as big as the text, so it changes with the text.
         textObject.input.hitArea.setSize(textObject.width, textObject.height);
@@ -1219,8 +1222,17 @@ export class Overlay extends Scene
             slot.circle.setVisible(true);
             slot.letterLabel.setVisible(true);
             slot.wordLabel.setVisible(true);
+            slot.wordLabel.gloss.color = null; // back to white (in case it was the bite color)
             this.setGlossLabel(slot.wordLabel, this.slotLabel(slot.word));
         });
+    }
+
+    // Called by the room when a fish bites: "Quixtia" turns COLOR_BITE.
+    showBite ()
+    {
+        const label = this.slots[this.fishingSlot].wordLabel;
+        label.gloss.color = COLOR_BITE;
+        this.showGlossText(label);
     }
 
     // Called by the room when the line is pulled in.
@@ -1293,6 +1305,15 @@ export class Overlay extends Scene
             boxes[letter] = { holder, box, part: mixed[i], slot: i, used: false };
         });
 
+        // --- The word, spelled out above the boxes one part at a time ---
+        // It starts empty. It sits exactly where the whole word appears at the end
+        // (see showFishWord), so the finished word is already in the right place.
+        // To find that place, write the whole word once, measure it, then empty it again.
+        const spelled = this.add.text(0, this.fishWordY(), entry.word, TEXT_STYLE).setOrigin(0, 0.5);
+        spelled.x = w / 2 - spelled.width / 2;
+        spelled.setText('');
+        ui.add(spelled);
+
         // --- Timer in the top right corner: a bar that gets shorter ---
         const barWidth = 60;
         const barX = w - 10 - barWidth; // left end of the bar
@@ -1308,6 +1329,7 @@ export class Overlay extends Scene
             ui,
             boxes,
             parts,
+            spelled,                  // the text above the boxes that fills up
             next: 0,                  // which part has to be pressed next (0, 1 or 2)
             timeLeft: MINIGAME_TIME,
             bar,
@@ -1343,22 +1365,18 @@ export class Overlay extends Scene
             return;
         }
 
-        // Right box: mark it and move it to its place in the word.
-        // The box that was in that place swaps over to where this one was.
+        // Right box: it turns green and stays where it is (so q/w/e don't get mixed up),
+        // and its part is added to the word above the boxes.
         pressed.used = true;
-        pressed.box.setFillStyle(COLOR_USED);
-
-        const targetSlot = game.next;
-        const other = Object.values(game.boxes).find((b) => b.slot === targetSlot);
-        if (other !== pressed)
-        {
-            other.slot = pressed.slot;
-            this.moveBox(other);
-        }
-        pressed.slot = targetSlot;
-        this.moveBox(pressed);
+        pressed.box.setFillStyle(COLOR_CORRECT);
 
         game.next++;
+
+        // Spell out the word up to here. The letters are taken from the word itself
+        // (not the lowercase parts), so it looks exactly like the finished word,
+        // e.g. "Chi", then "Chichil", then "Chichiltic".
+        const lettersSoFar = game.parts.slice(0, game.next).join('').length;
+        game.spelled.setText(game.entry.word.slice(0, lettersSoFar));
 
         if (game.next === game.parts.length)
         {
@@ -1388,7 +1406,9 @@ export class Overlay extends Scene
     // wrongBox = true if it failed because a wrong box was pressed (not because time ran out).
     finishMinigame (success, wrongBox = false)
     {
-        // Caught or not: the whole word appears for a moment.
+        // Caught or not: the whole word appears for a moment, in the same place
+        // as the spelled-out part (which is hidden, so the two don't overlap).
+        this.minigame.spelled.setVisible(false);
         this.showFishWord(this.minigame.entry);
 
         if (success)
@@ -1467,15 +1487,18 @@ export class Overlay extends Scene
     {
         this.removeFishWord(); // only one at a time
 
-        const w = this.scale.width;
-        const h = this.scale.height;
-
-        const text = this.add.text(w / 2, h / 2 - BOX_HEIGHT / 2 - 14, '', TEXT_STYLE).setOrigin(0.5);
+        const text = this.add.text(this.scale.width / 2, this.fishWordY(), '', TEXT_STYLE).setOrigin(0.5);
         this.makeGlossable(text);
         this.setGlossLabel(text, { nah: entry.word, en: entry.meaning });
 
         const timer = this.time.delayedCall(FISH_WORD_TIME, () => this.removeFishWord());
         this.fishWord = { text, timer };
+    }
+
+    // Up/down position of the fishing word: a little above the boxes.
+    fishWordY ()
+    {
+        return this.scale.height / 2 - BOX_HEIGHT / 2 - 14;
     }
 
     // Takes the fishing word off the screen (if it's there).

@@ -1020,6 +1020,9 @@ export class TestRoom extends Scene
         // The fish is biting now. If nobody pulls in time, the line comes back empty.
         this.fishing.biting = true;
         this.fishing.pullTimer = this.time.delayedCall(PULL_TIME, () => this.stopFishing());
+
+        // "Quixtia" changes color, so you know now is the time to pull.
+        this.scene.get('Overlay').showBite();
     }
 
     // The player pressed "pull" (Quixtia) while the line is out.
