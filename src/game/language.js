@@ -33,10 +33,16 @@ export function hasGloss (text)
 // The auxiliary language chosen in Settings: 'en' (English) or null (none).
 // It is kept in the game's registry, so it stays the same when the room or the
 // overlay is restarted (e.g. after loading a save file).
-// At the start of the game there is no auxiliary language.
+// At the start of the game, English is chosen (for now, to make testing easier;
+// later the game will start without an auxiliary language).
+const START_LANGUAGE = 'en';
+
 export function getAuxLanguage (scene)
 {
-    return scene.registry.get('auxLanguage') ?? null;
+    const language = scene.registry.get('auxLanguage');
+
+    // Nothing chosen yet in this game: use the start language.
+    return language === undefined ? START_LANGUAGE : language;
 }
 
 export function setAuxLanguage (scene, language)

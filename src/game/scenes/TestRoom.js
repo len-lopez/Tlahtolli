@@ -186,6 +186,11 @@ const AFTER_FAIL_OTHER_COLOR = 0.5;
 // How many life points the player has when full.
 // (The overlay uses this too, to know how many squares to draw.)
 export const MAX_LIFE = 3;
+
+// What a new game starts with (for now a lot, to make testing faster).
+// A loaded save file uses what's saved in it instead.
+const START_BEANS = 100;
+const START_BAG = { michin: 10 };
 // How many life points falling into the water costs.
 const WATER_DAMAGE = 1;
 // After blacking out: how long the screen takes to fade back in from black (milliseconds).
@@ -438,20 +443,21 @@ export class TestRoom extends Scene
             : MAX_LIFE;
 
         // --- Cacao beans (the money) ---
-        // A new game starts with 0. There's no way to get beans yet.
+        // A new game starts with START_BEANS (see the top of this file).
         // After loading a save file, the saved beans are used.
         // A save file without beans (older version), or with a strange number, gives 0.
-        const savedBeans = data && data.save ? data.save.beans : 0;
+        const savedBeans = data && data.save ? data.save.beans : START_BEANS;
         this.beans = Number.isInteger(savedBeans) && savedBeans >= 0 ? savedBeans : 0;
 
         // --- Bag ---
         // How many of each item the player has, e.g. { michin: 3 }.
         // The names (like "michin") are the ids in src/data/items.json.
-        // A new game starts with an empty bag. After loading a save file, the saved bag is used.
+        // A new game starts with START_BAG (see the top of this file).
+        // After loading a save file, the saved bag is used.
         // A save file without a bag (older version) gives an empty bag.
         // Any entry with a strange number (not a whole number, or below 0) is left out.
         this.bag = {};
-        const savedBag = data && data.save ? data.save.bag : null;
+        const savedBag = data && data.save ? data.save.bag : START_BAG;
         if (savedBag !== null && typeof savedBag === 'object')
         {
             Object.entries(savedBag).forEach(([ id, amount ]) => {
