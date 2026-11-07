@@ -4,11 +4,13 @@
 // Goes up by one whenever the contents of a save file change,
 // so that older save files can still be read later.
 // Version 1: room only. Version 2: room and life points.
-const SAVE_VERSION = 2;
+// Version 3: same as 2, but the Marketplace was added on the left, so the room numbers changed
+// (the game converts older save files by itself, see "Start room" in TestRoom.js).
+const SAVE_VERSION = 3;
 
 // Makes the contents of a new save file.
 // state = what the game wants to remember:
-//   room = the room the player is in (0 = room 1, 1 = room 2)
+//   room = the room the player is in (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors)
 //   life = how many life points (Yollotl) the player has left
 // More things (beans, bag, words, ...) will be added here later.
 export function createSave (state)

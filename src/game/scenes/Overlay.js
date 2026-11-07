@@ -76,6 +76,15 @@ const LIFE_LEFT = 8;        // distance from the left edge of the screen
 const LIFE_TOP = 8;         // distance from the top edge of the screen
 const COLOR_LIFE = 0xd62828;
 
+// Cacao beans (the money) in the top right corner: a small brown rectangle,
+// with the number of beans to its left.
+const BEAN_WIDTH = 6;        // size of the rectangle in pixels
+const BEAN_HEIGHT = 9;
+const BEAN_RIGHT = 8;        // distance from the right edge of the screen
+const BEAN_TOP = 8;          // distance from the top edge of the screen
+const BEAN_GAP = 4;          // space between the number and the rectangle
+const COLOR_BEAN = 0x5c3317;
+
 // Width of the menu panel (it sits in the middle of the screen).
 const MENU_WIDTH = 200;
 
@@ -173,6 +182,20 @@ export class Overlay extends Scene
         // (after loading a save file this can be fewer than 3).
         this.showLife(this.scene.get('TestRoom').life);
 
+        // --- Cacao beans in the top right corner ---
+        // The brown rectangle sits in the corner. Its top left corner is worked out
+        // from the right edge of the screen.
+        const beanLeft = w - BEAN_RIGHT - BEAN_WIDTH;
+        this.add.rectangle(beanLeft, BEAN_TOP, BEAN_WIDTH, BEAN_HEIGHT, COLOR_BEAN).setOrigin(0, 0);
+
+        // The number goes to the left of the rectangle. Its right edge is fixed
+        // (setOrigin(1, 0.5)), so when the number gets longer (9 -> 10) it grows to the left.
+        this.beanText = this.add.text(beanLeft - BEAN_GAP, BEAN_TOP + BEAN_HEIGHT / 2, '', TEXT_STYLE)
+            .setOrigin(1, 0.5);
+
+        // Show how many beans the player has right now. The room knows this (0 for now).
+        this.showBeans(this.scene.get('TestRoom').beans);
+
         // --- Enter key symbol in the bottom right corner ---
         const enterX = w - 20;
         const enterY = h - 14;
@@ -189,7 +212,8 @@ export class Overlay extends Scene
 
         // --- Menu screen, hidden at the start ---
         // It has several pages; only one is shown at a time:
-        // 'main'  = Profile, Bag, Word List, Save
+        // 'main'  = Profile, Bag, Map, Word List, Settings, Save
+        // 'map'   = list of all rooms
         // 'words' = the word list
         // 'save'  = download / upload a save file
         this.menu = this.add.container(0, 0).setVisible(false);
@@ -216,6 +240,7 @@ export class Overlay extends Scene
 
         this.pages = {
             main: this.makeChoicePage('main', menuText.main),
+            map: this.makeChoicePage('map', menuText.map),
             words: this.makeWordListPage(),
             save: this.makeChoicePage('save', menuText.save)
         };
@@ -478,7 +503,7 @@ export class Overlay extends Scene
         {
             if (page.items.length > 0)
             {
-                this.confirmChoice(page.items[page.chosen].id);
+                this.confirmChoice(page.items[page.chosen]);
             }
         }
         else if (key === 'w')
@@ -506,13 +531,28 @@ export class Overlay extends Scene
         const page = this.pages[pageName];
         page.chosen = index;
         this.updateHighlight();
-        this.confirmChoice(page.items[index].id);
+        this.confirmChoice(page.items[index]);
     }
 
-    // q was pressed (or a line clicked) on a menu line. id comes from src/data/menu.json.
-    confirmChoice (id)
+    // q was pressed (or a line clicked) on a menu line.
+    // item = that line from src/data/menu.json, e.g. { id: 'save', label: 'Save' }.
+    confirmChoice (item)
     {
-        if (id === 'words')
+        // On the map page, every line is a room: go there.
+        if (this.page === 'map')
+        {
+            this.teleport(item.room);
+            return;
+        }
+
+        const id = item.id;
+
+        if (id === 'map')
+        {
+            this.pages.map.chosen = 0;
+            this.showPage('map');
+        }
+        else if (id === 'words')
         {
             this.showPage('words');
         }
@@ -535,6 +575,14 @@ export class Overlay extends Scene
             );
         }
         // 'profile', 'bag' and 'settings' do nothing yet.
+    }
+
+    // For testing: closes the menu and puts the player into a room right away.
+    // room = the room's number (0 = Marketplace, 1 = Empty Room, 2 = Lake of Colors).
+    teleport (room)
+    {
+        this.closeMenu();
+        this.scene.get('TestRoom').goToRoom(room);
     }
 
     // Starts the room again from the beginning with the loaded save file.
@@ -964,6 +1012,15 @@ export class Overlay extends Scene
     showLife (life)
     {
         this.lifeSquares.forEach((square, i) => square.setVisible(i < life));
+    }
+
+    // ---------- Cacao beans ----------
+
+    // Writes the number of cacao beans next to the brown rectangle.
+    // Call this whenever the number of beans changes.
+    showBeans (beans)
+    {
+        this.beanText.setText(String(beans));
     }
 
     // ---------- Slots ----------
