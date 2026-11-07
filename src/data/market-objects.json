@@ -1,0 +1,5 @@
+{
+    "objectA": { "name": { "nah": "Object A", "en": "Object A" }, "plural": { "nah": "Objects A", "en": "Objects A" } },
+    "objectB": { "name": { "nah": "Object B", "en": "Object B" }, "plural": { "nah": "Objects B", "en": "Objects B" } },
+    "objectC": { "name": { "nah": "Object C", "en": "Object C" }, "plural": { "nah": "Objects C", "en": "Objects C" } }
+}

@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
 import plantText from '../../data/plants.json';
+import marketObjectText from '../../data/market-objects.json';
 import { createProgress, recordAnswer } from '../progress.js';
 
 // Size of one tile in pixels. Tiled maps will use the same size later.
@@ -96,27 +97,28 @@ function buildMarketplaceGrid ()
 // headband = the color of a thin band near the top of the box, or null for none.
 // wares    = (merchants only) little piles of goods lying on the mat next to them:
 //            x = left/right of the merchant's middle, width/height in pixels, and color.
-// 5 merchants in the right half, the marketplace leader on the plateau under the roof.
+// 5 merchants on the flat ground, 8 tiles apart (so their piles of counting objects
+// have room), the marketplace leader on the plateau under the roof.
 const MARKET_NPCS = [
     { col: 5, type: 'judge', height: 17, color: 0xf0ead6, headband: 0xb22222, wares: [] },
     {
-        col: 36, type: 'merchant', height: 16, color: 0x9b5de5, headband: null,
+        col: 24, type: 'merchant', height: 16, color: 0x9b5de5, headband: null,
         wares: [ { x: -12, width: 6, height: 4, color: 0x6b8e23 }, { x: -6, width: 4, height: 3, color: 0x6b8e23 } ]
     },
     {
-        col: 41, type: 'merchant', height: 15, color: 0x7b4fc4, headband: 0xf2c418,
+        col: 32, type: 'merchant', height: 15, color: 0x7b4fc4, headband: 0xf2c418,
         wares: [ { x: -11, width: 8, height: 6, color: 0xb5651d } ]
     },
     {
-        col: 47, type: 'merchant', height: 17, color: 0xa86fd8, headband: null,
+        col: 40, type: 'merchant', height: 17, color: 0xa86fd8, headband: null,
         wares: [ { x: -13, width: 4, height: 4, color: 0xd62828 }, { x: -8, width: 4, height: 4, color: 0xf2c418 } ]
     },
     {
-        col: 52, type: 'merchant', height: 14, color: 0x8a5cc9, headband: 0x2a9d8f,
+        col: 48, type: 'merchant', height: 14, color: 0x8a5cc9, headband: 0x2a9d8f,
         wares: [ { x: -11, width: 7, height: 3, color: 0x5a3a1a }, { x: -10, width: 5, height: 2, color: 0x5a3a1a } ]
     },
     {
-        col: 58, type: 'merchant', height: 16, color: 0x9467d0, headband: 0xffffff,
+        col: 56, type: 'merchant', height: 16, color: 0x9467d0, headband: 0xffffff,
         wares: [ { x: -12, width: 5, height: 5, color: 0xe9c46a }, { x: -7, width: 3, height: 3, color: 0xe9c46a } ]
     }
 ];
@@ -148,14 +150,15 @@ const COLOR_BACKREST = 0xb89b5e;
 // Every time you walk into the Marketplace, each merchant gets 0 to MAX_OBJECTS_EACH
 // of every object type (picked at random), lying on the ground next to their mat.
 // They don't move. Leaving the Marketplace takes them away.
-// For now these are demo objects (A, B, C) in different colors.
+// For now these are demo objects (A, B, C) in different colors, each marked with its letter.
+// Their names are in src/data/market-objects.json under the same id.
 const MARKET_OBJECTS = [
-    { id: 'objectA', color: 0xe76f51 },
-    { id: 'objectB', color: 0x4cc9f0 },
-    { id: 'objectC', color: 0xf8f9fa }
+    { id: 'objectA', color: 0xe76f51, letter: 'a' },
+    { id: 'objectB', color: 0x4cc9f0, letter: 'b' },
+    { id: 'objectC', color: 0xf8f9fa, letter: 'c' }
 ];
 const MAX_OBJECTS_EACH = 4;
-const OBJECT_SIZE = 4;   // each object is a small square, in pixels
+const OBJECT_SIZE = 10;  // each object is a square, in pixels
 const OBJECT_GAP = 1;    // space between two objects lying next to / on top of each other
 // Where the objects lie: in two little piles, one on each side of the mat.
 // Each pile is OBJECT_PILE_COLUMNS wide and up to OBJECT_PILE_ROWS high,
@@ -508,6 +511,10 @@ export class TestRoom extends Scene
 
         // Same for the counting objects: made every time you walk into the Marketplace.
         this.marketObjects = [];
+
+        // The leader's counting task while it's running: { id, total }
+        // (which object to count, and how many there are). null when there is none.
+        this.marketQuest = null;
 
         // The left, right and top edges of the whole map (all rooms together) are walls.
         // The bottom edge is open, so the player can fall off the screen.
@@ -966,11 +973,7 @@ export class TestRoom extends Scene
 
             if (npc.type === 'judge')
             {
-                // The leader first says who he is, then asks for help surveying the
-                // merchandise (paid in cacao). Yes or no: for now, both just close the box.
-                overlay.openDialogue(npcText.judge.line, () => {
-                    overlay.openQuestion(npcText.judge.request, () => {}, () => {});
-                });
+                this.talkToLeader(overlay);
                 return;
             }
 
@@ -983,6 +986,47 @@ export class TestRoom extends Scene
             this.talking = null;
         });
         this.talking = { bubble, timer };
+    }
+
+    // Talking to the marketplace leader (the counting task).
+    // - No task yet: he says who he is, then asks for help surveying the merchandise
+    //   (paid in cacao). Yes: he picks one object type and tells you to count all of them
+    //   in the market and come back; the task starts. No: the box just closes.
+    // - Task running: he first asks whether you counted them all. Yes or no:
+    //   for now, both just close the box (the task keeps running).
+    talkToLeader (overlay)
+    {
+        if (this.marketQuest)
+        {
+            overlay.openQuestion(npcText.judge.countedAll, () => {}, () => {});
+            return;
+        }
+
+        overlay.openDialogue(npcText.judge.line, () => {
+            overlay.openQuestion(npcText.judge.request, () => this.startMarketQuest(overlay), () => {});
+        });
+    }
+
+    // Starts the counting task: picks one of the object types that are lying around
+    // right now, remembers how many there are in the whole market,
+    // and the leader says which one to count (its name goes into the gap in his sentence).
+    startMarketQuest (overlay)
+    {
+        const counts = MARKET_OBJECTS.map((type) => ({
+            id: type.id,
+            total: this.marketObjects.filter((object) => object.id === type.id).length
+        }));
+
+        // Only types there is at least one of (if there's none of anything, any type).
+        const present = counts.filter((count) => count.total > 0);
+        const pool = present.length > 0 ? present : counts;
+        const chosen = pool[randomBetween(0, pool.length - 1)];
+
+        // The task: which object, and the right answer (how many there are).
+        this.marketQuest = { id: chosen.id, total: chosen.total };
+
+        // 2 = use the plural form of the name ("all the ...").
+        overlay.openDialogue(overlay.fillTemplate(npcText.judge.order, 2, marketObjectText[chosen.id]));
     }
 
     // Itta: look at what's in front of the player. No animation; a dialogue box opens.
@@ -1695,7 +1739,10 @@ export class TestRoom extends Scene
                 const y = ground - OBJECT_SIZE / 2 - place.row * pitch;
                 const box = this.add.rectangle(x + place.x, y, OBJECT_SIZE, OBJECT_SIZE, type.color)
                     .setDepth(-1);
-                this.marketObjects.push({ box, id: type.id });
+                const letter = this.add.text(x + place.x, y, type.letter,
+                    { fontFamily: 'Arial', fontSize: 8, color: '#000000' })
+                    .setOrigin(0.5).setDepth(-1);
+                this.marketObjects.push({ box, letter, id: type.id });
             });
         });
     }
@@ -1703,7 +1750,10 @@ export class TestRoom extends Scene
     // Takes all counting objects away.
     removeMarketObjects ()
     {
-        this.marketObjects.forEach((object) => object.box.destroy());
+        this.marketObjects.forEach((object) => {
+            object.box.destroy();
+            object.letter.destroy();
+        });
         this.marketObjects = [];
     }
 
@@ -1840,7 +1890,9 @@ export class TestRoom extends Scene
             }
 
             // The same for the counting objects in the Marketplace (room 0).
+            // Leaving the Marketplace also cancels the leader's counting task.
             this.removeMarketObjects();
+            this.marketQuest = null;
             if (room === 0)
             {
                 this.spawnMarketObjects();
