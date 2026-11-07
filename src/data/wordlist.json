@@ -3,5 +3,7 @@
     { "word": "Michma", "action": "fish" },
     { "word": "Cochi", "action": "sleep" },
     { "word": "Ihtoa", "action": "talk" },
-    { "word": "Itta", "action": "inspect" }
+    { "word": "Itta", "action": "inspect" },
+    { "word": "Cohua", "action": "buy" },
+    { "word": "Namaca", "action": "sell" }
 ]

@@ -28,6 +28,8 @@
     },
     "messages": {
         "badFile": "This file is not a Tlahtolli save file.",
-        "nothingToInspect": "(Placeholder) There is nothing to inspect here."
+        "nothingToInspect": "(Placeholder) There is nothing to inspect here.",
+        "notInterested": "(Placeholder) Not interested.",
+        "notEnoughCacao": "(Placeholder) Not enough cacao."
     }
 }

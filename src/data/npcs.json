@@ -1,7 +1,8 @@
 {
     "merchant": {
         "line": "Nipochtecatl.",
-        "inspect": "Ca pochtecatl."
+        "inspect": "Ca pochtecatl.",
+        "sells": [ "michin" ]
     },
     "judge": {
         "line": "Tianquizpan nitlayacanqui",

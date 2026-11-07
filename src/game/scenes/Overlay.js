@@ -103,6 +103,14 @@ const BAG_FISH_WIDTH = 10;
 const BAG_FISH_HEIGHT = 5;
 const COLOR_BAG_FISH = 0x9fb7c9;
 
+// Shop window (Cohua / Namaca): where things go on each line, from the right edge.
+// Rightmost: a small cacao bean (like the one in the top right corner), with the price
+// to its left. When selling, how many you have goes further left.
+const SHOP_BEAN_WIDTH = 5;
+const SHOP_BEAN_HEIGHT = 7;
+const SHOP_PRICE_RIGHT = LIST_RIGHT - SHOP_BEAN_WIDTH - 3; // right edge of the price
+const SHOP_COUNT_RIGHT = LIST_RIGHT - 40;                   // right edge of the count
+
 // The overlay is its own scene that is drawn on top of the room.
 // It never moves with the map, so it always stays in the same place on screen.
 export class Overlay extends Scene
@@ -125,6 +133,7 @@ export class Overlay extends Scene
         // 'minigame' = a fish bit, q/w/e boxes are on screen
         // 'reveal'   = catch failed, the boxes show the right order for a moment
         // 'dialogue' = an NPC is talking, the dialogue box is open
+        // 'trade'    = the shop window is open (buying with Cohua or selling with Namaca)
         this.mode = 'play';
 
         // The fishing minigame while it's running, or null.
@@ -298,6 +307,34 @@ export class Overlay extends Scene
 
         this.dialogue.add([ dialogueBox, this.dialogueText, qCircle, qLetter, qLabel ]);
 
+        // --- Shop window: buying (Cohua) or selling (Namaca), hidden at the start ---
+        // Looks like the menu: the same panel, a list with a blue bar on the chosen line,
+        // and the hints "(q) confirm  (w) back" at the bottom left.
+        this.trade = this.add.container(0, 0).setVisible(false);
+
+        const tradePanel = this.add.rectangle(w / 2, h / 2, MENU_WIDTH, h - 60, 0x222222, 0.9)
+            .setStrokeStyle(1, 0xffffff);
+        this.tradeHighlight = this.add.rectangle(LIST_LEFT - 4, LIST_TOP - 1, MENU_WIDTH - 24, LINE_HEIGHT - 1, COLOR_USED)
+            .setOrigin(0, 0);
+        this.tradeLines = this.add.container(0, 0); // the lines; redrawn after every buy/sell
+
+        // Message under the list, e.g. when you don't have enough beans.
+        this.tradeMessage = this.add.text(LIST_LEFT, 0, '', { ...TEXT_STYLE, wordWrap: { width: MENU_WIDTH - 32 } });
+
+        this.trade.add([ tradePanel, this.tradeHighlight, this.tradeLines, this.tradeMessage ]);
+
+        [ [ 'q', menuText.buttons.confirm ], [ 'w', menuText.buttons.back ] ].forEach(([ letter, label ], i) => {
+            const circleX = 18 + i * 80;
+            const circle = this.add.circle(circleX, hintY, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
+            const letterText = this.add.text(circleX, hintY, letter, TEXT_STYLE).setOrigin(0.5);
+            const labelText = this.add.text(circleX + 16, hintY, label, TEXT_STYLE).setOrigin(0, 0.5);
+            this.trade.add([ circle, letterText, labelText ]);
+        });
+
+        this.tradeKind = null;   // 'buy' or 'sell' while the window is open
+        this.tradeGoods = [];    // ids of what the merchant sells
+        this.tradeChosen = 0;    // which line is chosen
+
         // Every key press goes through here.
         this.input.keyboard.on('keydown', (event) => this.handleKey(event));
 
@@ -346,6 +383,12 @@ export class Overlay extends Scene
         if (this.mode === 'menu')
         {
             this.handleMenuKey(event);
+            return;
+        }
+
+        if (this.mode === 'trade')
+        {
+            this.handleTradeKey(event);
             return;
         }
 
@@ -1031,7 +1074,7 @@ export class Overlay extends Scene
 
     // Called every frame: runs the minigame timer.
     // The word next to the Enter symbol, depending on what the player is doing:
-    // walking around = "menu", typing a word = "confirm", menu open = "close".
+    // walking around = "menu", typing a word = "confirm", menu or shop window open = "close".
     // While fishing (line out, fish biting, after a failed catch) Enter does nothing,
     // so the Enter symbol and its word are hidden then.
     updateEnterLabel ()
@@ -1039,7 +1082,8 @@ export class Overlay extends Scene
         const words = {
             play: menuText.buttons.menu,
             prompt: menuText.buttons.confirm,
-            menu: menuText.buttons.close
+            menu: menuText.buttons.close,
+            trade: menuText.buttons.close
         };
         let word = words[this.mode] ?? '';
 
@@ -1088,6 +1132,162 @@ export class Overlay extends Scene
     {
         const room = this.scene.get('TestRoom');
         return room.sleep !== null || room.talking !== null;
+    }
+
+    // ---------- Shop window (Cohua / Namaca) ----------
+
+    // Called by the room when the player uses Cohua or Namaca on a merchant.
+    // kind  = 'buy' (shows what the merchant sells, with prices)
+    //         or 'sell' (shows what's in your bag, how many, and what it sells for).
+    // goods = ids of what this merchant sells (from src/data/npcs.json).
+    // The room stops while the window is open, like with the menu.
+    openTrade (kind, goods)
+    {
+        this.mode = 'trade';
+        this.tradeKind = kind;
+        this.tradeGoods = goods;
+        this.tradeChosen = 0;
+        this.tradeMessage.setText('');
+        this.fillTradeLines();
+
+        this.trade.setVisible(true);
+        this.qweButtons.setVisible(false);
+        this.scene.pause('TestRoom');
+    }
+
+    closeTrade ()
+    {
+        this.mode = 'play';
+        this.trade.setVisible(false);
+        this.qweButtons.setVisible(true);
+        this.scene.resume('TestRoom');
+    }
+
+    // The lines shown in the shop window right now (items from src/data/items.json).
+    // Buying: what the merchant sells. Selling: what's in your bag (at least 1)
+    // and has a sell price.
+    tradeEntries ()
+    {
+        if (this.tradeKind === 'buy')
+        {
+            return this.tradeGoods
+                .map((id) => items.find((item) => item.id === id))
+                .filter((item) => item !== undefined);
+        }
+
+        const bag = this.scene.get('TestRoom').bag;
+        return items.filter((item) => (bag[item.id] ?? 0) > 0 && item.sellPrice !== undefined);
+    }
+
+    // Draws the lines of the shop window. Called when it opens and after every buy/sell,
+    // because the numbers change (and sold-out items disappear from the sell list).
+    // Each line: placeholder fish picture, name, (when selling: how many you have),
+    // price, and a small cacao bean.
+    fillTradeLines ()
+    {
+        this.tradeLines.removeAll(true); // take away the old lines
+
+        const entries = this.tradeEntries();
+        const bag = this.scene.get('TestRoom').bag;
+
+        entries.forEach((item, i) => {
+            const top = LIST_TOP + i * LINE_HEIGHT;
+            const middle = top + LINE_HEIGHT / 2 - 1;
+
+            // An invisible area over the whole line: clicking it is the same as choosing
+            // the line and pressing q. (Added first, so it lies under the text.)
+            const clickArea = this.add.rectangle(LIST_LEFT - 4, top - 1, MENU_WIDTH - 24, LINE_HEIGHT - 1)
+                .setOrigin(0, 0)
+                .setInteractive({ useHandCursor: true });
+            clickArea.on('pointerdown', () => {
+                if (this.mode === 'trade')
+                {
+                    this.tradeChosen = i;
+                    this.updateTradeHighlight();
+                    this.confirmTrade();
+                }
+            });
+
+            const picture = this.add.rectangle(LIST_LEFT, middle, BAG_FISH_WIDTH, BAG_FISH_HEIGHT, COLOR_BAG_FISH)
+                .setOrigin(0, 0.5);
+            const name = this.add.text(LIST_LEFT + BAG_FISH_WIDTH + 6, top, item.name, TEXT_STYLE);
+
+            const price = this.tradeKind === 'buy' ? item.buyPrice : item.sellPrice;
+            const priceText = this.add.text(SHOP_PRICE_RIGHT, top, String(price), TEXT_STYLE).setOrigin(1, 0);
+            const bean = this.add.rectangle(LIST_RIGHT - SHOP_BEAN_WIDTH, middle, SHOP_BEAN_WIDTH, SHOP_BEAN_HEIGHT, COLOR_BEAN)
+                .setOrigin(0, 0.5);
+
+            this.tradeLines.add([ clickArea, picture, name, priceText, bean ]);
+
+            if (this.tradeKind === 'sell')
+            {
+                const count = this.add.text(SHOP_COUNT_RIGHT, top, String(bag[item.id]), TEXT_STYLE).setOrigin(1, 0);
+                this.tradeLines.add(count);
+            }
+        });
+
+        // The message goes under the last line (or at the top if the list is empty).
+        this.tradeMessage.setY(LIST_TOP + entries.length * LINE_HEIGHT + 8);
+
+        // If the chosen line is gone (sold out), choose the last line instead.
+        this.tradeChosen = Math.min(this.tradeChosen, Math.max(entries.length - 1, 0));
+        this.tradeHighlight.setVisible(entries.length > 0);
+        this.updateTradeHighlight();
+    }
+
+    // Moves the blue bar to the chosen line.
+    updateTradeHighlight ()
+    {
+        this.tradeHighlight.y = LIST_TOP - 1 + this.tradeChosen * LINE_HEIGHT;
+    }
+
+    // A key press while the shop window is open:
+    // up/down = choose, q = buy/sell one, w or Enter = close.
+    handleTradeKey (event)
+    {
+        const key = event.key.toLowerCase();
+        const entries = this.tradeEntries();
+
+        if (key === 'w' || key === 'enter')
+        {
+            this.closeTrade();
+        }
+        else if ((key === 'arrowup' || key === 'arrowdown') && entries.length > 0)
+        {
+            const step = key === 'arrowup' ? -1 : 1;
+            this.tradeChosen = Math.min(Math.max(this.tradeChosen + step, 0), entries.length - 1);
+            this.updateTradeHighlight();
+        }
+        else if (key === 'q')
+        {
+            this.confirmTrade();
+        }
+    }
+
+    // Buys or sells one of the chosen item.
+    confirmTrade ()
+    {
+        const entries = this.tradeEntries();
+        if (entries.length === 0)
+        {
+            return; // nothing to buy or sell
+        }
+
+        const item = entries[this.tradeChosen];
+        const room = this.scene.get('TestRoom');
+
+        if (this.tradeKind === 'buy')
+        {
+            const bought = room.buyItem(item.id, item.buyPrice);
+            this.tradeMessage.setText(bought ? '' : menuText.messages.notEnoughCacao);
+        }
+        else
+        {
+            room.sellItem(item.id, item.sellPrice);
+            this.tradeMessage.setText('');
+        }
+
+        this.fillTradeLines();
     }
 
     // ---------- Dialogue (Ihtoa) ----------

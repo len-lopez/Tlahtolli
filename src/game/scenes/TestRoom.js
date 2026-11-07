@@ -488,6 +488,10 @@ export class TestRoom extends Scene
         {
             this.inspect();
         }
+        else if (action === 'buy' || action === 'sell')
+        {
+            this.trade(action);
+        }
         else if (action === 'sleep')
         {
             // Only on the ground, not in mid-air.
@@ -1013,6 +1017,57 @@ export class TestRoom extends Scene
     addToBag (id, amount)
     {
         this.bag[id] = (this.bag[id] ?? 0) + amount;
+    }
+
+    // ---------- Buying and selling (Cohua / Namaca) ----------
+
+    // kind = 'buy' (Cohua) or 'sell' (Namaca).
+    // Only merchants trade: an NPC is a merchant if it has a "sells" list in src/data/npcs.json.
+    // - Nobody in front: the "that didn't work" wobble, like fishing away from water.
+    // - Another NPC in front: a placeholder message that they're not interested.
+    // - A merchant in front: buy opens the shop window, sell opens your bag to sell from.
+    trade (kind)
+    {
+        const npc = this.npcInFront();
+        const overlay = this.scene.get('Overlay');
+
+        if (!npc)
+        {
+            this.failAction();
+        }
+        else if (!npcText[npc.type].sells)
+        {
+            overlay.openDialogue(menuText.messages.notInterested);
+        }
+        else
+        {
+            overlay.openTrade(kind, npcText[npc.type].sells);
+        }
+    }
+
+    // Buys one of an item. Returns false (and changes nothing) if there aren't enough beans.
+    buyItem (id, price)
+    {
+        if (this.beans < price)
+        {
+            return false;
+        }
+        this.beans -= price;
+        this.addToBag(id, 1);
+        this.scene.get('Overlay').showBeans(this.beans);
+        return true;
+    }
+
+    // Sells one of an item from the bag.
+    sellItem (id, price)
+    {
+        if ((this.bag[id] ?? 0) < 1)
+        {
+            return;
+        }
+        this.bag[id] -= 1;
+        this.beans += price;
+        this.scene.get('Overlay').showBeans(this.beans);
     }
 
     // Placeholder "caught it!" animation: the fish flies out of the water
