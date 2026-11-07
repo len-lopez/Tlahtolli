@@ -1,9 +1,9 @@
 {
     "main": [
         { "id": "profile", "label": { "nah": "Nehhuatl", "en": "Profile" } },
-        { "id": "bag", "label": { "nah": "Noxiquipil", "en": "Bag" } },
+        { "id": "bag", "label": { "nah": "Noxiquipil", "en": "My Bag" } },
         { "id": "map", "label": { "nah": "Amatlacuilolli", "en": "Map" } },
-        { "id": "words", "label": { "nah": "Notlahtol", "en": "Word List" } },
+        { "id": "words", "label": { "nah": "Notlahtol", "en": "My Words" } },
         { "id": "settings", "label": { "nah": "Tlatecpantli", "en": "Settings" } },
         { "id": "save", "label": { "nah": "Tlapializtli", "en": "Save" } }
     ],
@@ -17,15 +17,15 @@
         { "id": "upload", "label": { "nah": "Xiccalaqui in motlapial", "en": "Upload save file" } }
     ],
     "settings": [
-        { "language": "en", "label": { "nah": "English", "en": "English" } },
+        { "language": "en", "label": { "nah": "English", "en": null } },
         { "language": null, "label": { "nah": "Amo", "en": "None" } }
     ],
     "buttons": {
-        "menu": { "nah": "Xictlapo", "en": "open" },
-        "confirm": { "nah": "Quemah", "en": "confirm" },
-        "back": { "nah": "Ximocuepa", "en": "back" },
-        "close": { "nah": "Xictzacua", "en": "close" },
-        "cancel": { "nah": "Amo", "en": "cancel" }
+        "menu": { "nah": "Xictlapo", "en": "Open" },
+        "confirm": { "nah": "Quemah", "en": "Confirm" },
+        "back": { "nah": "Ximocuepa", "en": "Back" },
+        "close": { "nah": "Xictzacua", "en": "Close" },
+        "cancel": { "nah": "Amo", "en": "Cancel" }
     },
     "hud": {
         "life": { "nah": "Yollotl", "en": "Life" }
@@ -36,13 +36,13 @@
     },
     "messages": {
         "badFile": { "nah": "Inin amo tlapialli.", "en": "This file is not a Tlahtolli save file." },
-        "nothingToInspect": { "nah": "Atle nican.", "en": "There is nothing to inspect here." },
+        "nothingToInspect": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "nican.", "en": "here." } ] },
         "notInterested": { "nah": "Amo nicnequi.", "en": "Not interested." },
         "notEnoughCacao": { "nah": "Amo ixachi in mocacahuauh.", "en": "Not enough cacao." },
         "bought": { "nah": null, "en": "(Placeholder) Bought {count} {item}." },
         "sold": { "nah": null, "en": "(Placeholder) Sold {count} {item}." },
         "whatToBuy": { "nah": "Tlein ticcohuaznequi?", "en": "What do you want to buy?" },
-        "whatToSell": { "nah": "Tlein ticnamacaznequi?", "en": "What do you want to sell?" },
-        "bagEmpty": { "nah": "Atle ipan moxiquipil.", "en": "Your bag is empty." }
+        "whatToSell": { "words": [ { "nah": "Tle", "en": "What" }, { "nah": "ticnamacaznequi?", "en": "do you want to sell?" } ] },
+        "bagEmpty": { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "ipan", "en": "inside" }, { "nah": "moxiquipil.", "en": "your bag." } ] }
     }
 }

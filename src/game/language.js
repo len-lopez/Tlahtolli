@@ -1,17 +1,33 @@
-// Every text in src/data/menu.json has two versions:
+// Every text in src/data/ has two versions:
 // { "nah": "Nahuatl version", "en": "English version" }.
-// These helpers pick one of them.
+// A sentence that is glossed word by word is a list of such words instead:
+// { "words": [ { "nah": "Atle", "en": "Nothing" }, { "nah": "nican.", "en": "here." } ] }
+// These helpers pick one of the versions.
 
 // The Nahuatl version. If there is none yet ("nah": null), the English one is shown instead.
 export function nahuatl (text)
 {
+    if (text.words)
+    {
+        return text.words.map(nahuatl).join(' ');
+    }
     return text.nah ?? text.en;
 }
 
 // The English version (the gloss).
 export function english (text)
 {
+    if (text.words)
+    {
+        return text.words.map(english).join(' ');
+    }
     return text.en ?? text.nah;
+}
+
+// True if a text has both versions, so it can be switched between them.
+export function hasGloss (text)
+{
+    return text !== null && text.nah != null && text.en != null;
 }
 
 // The auxiliary language chosen in Settings: 'en' (English) or null (none).
