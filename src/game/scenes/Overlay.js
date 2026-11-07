@@ -16,6 +16,9 @@ const MINIGAME_TIME = 5000;
 // (counted from the moment it failed, shaking included).
 const REVEAL_TIME = 1500;
 
+// After a catch (caught or not): how long the whole word stays on screen, in milliseconds.
+const FISH_WORD_TIME = 3000;
+
 // After pressing a wrong box: how long the boxes shake, in milliseconds.
 const SHAKE_TIME = 300;
 
@@ -104,7 +107,7 @@ const LIST_RIGHT = (512 + MENU_WIDTH) / 2 - 16;
 // Gloss button: a small square at the right end of every menu line.
 // Clicking it switches the line between Nahuatl and English.
 // It's only shown when English is chosen as auxiliary language in Settings.
-const GLOSS_SIZE = 10;                                   // size of the square in pixels
+const GLOSS_SIZE = 12;                                   // size of the square in pixels
 const GLOSS_SPACE = GLOSS_SIZE + 6;                      // room it takes at the end of a line
 const GLOSS_X = LIST_LEFT - 4 + MENU_WIDTH - 24 - GLOSS_SPACE / 2; // middle of the square
 
@@ -154,9 +157,16 @@ export class Overlay extends Scene
         // The fishing minigame while it's running, or null.
         this.minigame = null;
 
+        // The whole fishing word shown after a catch, or null (see showFishWord).
+        this.fishWord = null;
+
         // The last q/w/e key used for a power, and the key the fishing line was cast with.
         this.lastUsedSlot = null;
         this.fishingSlot = null;
+
+        // Every single text outside the menu lists that can be clicked for its gloss
+        // (see makeGlossable).
+        this.glossTexts = [];
 
         // --- q / w / e slots on the left edge ---
         // Each slot is either empty (word = null) or used (word = a word from the list).
@@ -184,7 +194,9 @@ export class Overlay extends Scene
             const label = this.add.text(x, y, letter, TEXT_STYLE).setOrigin(0.5);
 
             // Shows the word next to the circle when the slot is used.
+            // Clicking the word shows its gloss (clicking the circle uses the power).
             const wordLabel = this.add.text(x + radius + 6, y, '', TEXT_STYLE).setOrigin(0, 0.5);
+            this.makeGlossable(wordLabel);
 
             this.qweButtons.add([ circle, label, wordLabel ]);
 
@@ -193,7 +205,10 @@ export class Overlay extends Scene
 
         // --- Life points (Yollotl) in the top left corner ---
         // First the word (from src/data/menu.json), in the corner.
-        const lifeLabel = this.add.text(LIFE_LEFT, LIFE_TOP, nahuatl(menuText.hud.life), TEXT_STYLE);
+        // Clicking the word shows its gloss.
+        const lifeLabel = this.add.text(LIFE_LEFT, LIFE_TOP, '', TEXT_STYLE);
+        this.makeGlossable(lifeLabel);
+        this.setGlossLabel(lifeLabel, menuText.hud.life);
 
         // Then one red square per life point, side by side, right after the word.
         // They start where the word ends (plus a small gap), and sit at the
@@ -262,17 +277,22 @@ export class Overlay extends Scene
         // Bottom left: (q) confirm  (w) back. Bottom right, next to the Enter symbol: close.
         const hintY = h - 14;
 
-        [ [ 'q', nahuatl(menuText.buttons.confirm) ], [ 'w', nahuatl(menuText.buttons.back) ] ].forEach(([ letter, label ], i) => {
+        // Clicking a hint word shows its gloss.
+        [ [ 'q', menuText.buttons.confirm ], [ 'w', menuText.buttons.back ] ].forEach(([ letter, label ], i) => {
             const circleX = 18 + i * 80;
             const circle = this.add.circle(circleX, hintY, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
             const letterText = this.add.text(circleX, hintY, letter, TEXT_STYLE).setOrigin(0.5);
-            const labelText = this.add.text(circleX + 16, hintY, label, TEXT_STYLE).setOrigin(0, 0.5);
+            const labelText = this.add.text(circleX + 16, hintY, '', TEXT_STYLE).setOrigin(0, 0.5);
+            this.makeGlossable(labelText, 'menu');
+            this.setGlossLabel(labelText, label);
             this.menu.add([ circle, letterText, labelText ]);
         });
 
         // Word just to the left of the Enter symbol (which is at w - 20, 24 pixels wide).
         // It says what Enter does right now: "menu", "confirm" or "close" (see updateEnterLabel).
+        // Clicking the word shows its gloss (clicking the Enter symbol does what Enter does).
         this.enterLabel = this.add.text(w - 20 - 12 - 6, hintY, '', TEXT_STYLE).setOrigin(1, 0.5);
+        this.makeGlossable(this.enterLabel);
 
         this.pages = {
             main: this.makeChoicePage('main', menuText.main),
@@ -311,23 +331,33 @@ export class Overlay extends Scene
 
         // --- Dialogue box: what an NPC says (Ihtoa), hidden at the start ---
         // A wide box near the bottom of the screen, with the text inside,
-        // and the hint "(q) confirm" at the bottom left (q closes it).
+        // an advance symbol (▶) at its right end, and the hint "(q) confirm"
+        // at the bottom left (q closes it).
         this.dialogue = this.add.container(0, 0).setVisible(false);
 
         const dialogueBox = this.add.rectangle(w / 2, h - 52, w - 80, 44, 0x222222, 0.9)
             .setStrokeStyle(1, 0xffffff);
-        this.dialogueText = this.add.text(48, h - 52 - 22 + 8, '',
-            { ...TEXT_STYLE, wordWrap: { width: w - 80 - 16 } });
 
-        // Clicking the box does the same as pressing q.
-        dialogueBox.setInteractive({ useHandCursor: true });
-        dialogueBox.on('pointerdown', () => this.closeDialogue());
+        // The text leaves room on the right for the advance symbol.
+        // Clicking the text shows the gloss of the whole sentence (it doesn't close the box).
+        this.dialogueText = this.add.text(48, h - 52 - 22 + 8, '',
+            { ...TEXT_STYLE, wordWrap: { width: w - 80 - 16 - 30 } });
+        this.makeGlossable(this.dialogueText, 'dialogue');
+
+        // Advance symbol: clicking it does the same as pressing q.
+        const advanceX = w - 40 - 18; // the box's right edge is at w - 40
+        const advanceBox = this.add.rectangle(advanceX, h - 52, 20, 16, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
+        const advanceSign = this.add.text(advanceX, h - 52, '▶', { ...TEXT_STYLE, fontSize: 9 }).setOrigin(0.5);
+        advanceBox.setInteractive({ useHandCursor: true });
+        advanceBox.on('pointerdown', () => this.closeDialogue());
 
         const qCircle = this.add.circle(18, h - 14, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
         const qLetter = this.add.text(18, h - 14, 'q', TEXT_STYLE).setOrigin(0.5);
-        const qLabel = this.add.text(34, h - 14, nahuatl(menuText.buttons.confirm), TEXT_STYLE).setOrigin(0, 0.5);
+        const qLabel = this.add.text(34, h - 14, '', TEXT_STYLE).setOrigin(0, 0.5);
+        this.makeGlossable(qLabel, 'dialogue');
+        this.setGlossLabel(qLabel, menuText.buttons.confirm);
 
-        this.dialogue.add([ dialogueBox, this.dialogueText, qCircle, qLetter, qLabel ]);
+        this.dialogue.add([ dialogueBox, this.dialogueText, advanceBox, advanceSign, qCircle, qLetter, qLabel ]);
 
         // --- Shop window: buying (Cohua) or selling (Namaca), hidden at the start ---
         // Looks like the menu: the same panel, a list with a blue bar on the chosen line,
@@ -345,11 +375,14 @@ export class Overlay extends Scene
 
         this.trade.add([ tradePanel, this.tradeHighlight, this.tradeLines, this.tradeMessage ]);
 
-        [ [ 'q', nahuatl(menuText.buttons.confirm) ], [ 'w', nahuatl(menuText.buttons.back) ] ].forEach(([ letter, label ], i) => {
+        // Clicking a hint word shows its gloss.
+        [ [ 'q', menuText.buttons.confirm ], [ 'w', menuText.buttons.back ] ].forEach(([ letter, label ], i) => {
             const circleX = 18 + i * 80;
             const circle = this.add.circle(circleX, hintY, 10, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
             const letterText = this.add.text(circleX, hintY, letter, TEXT_STYLE).setOrigin(0.5);
-            const labelText = this.add.text(circleX + 16, hintY, label, TEXT_STYLE).setOrigin(0, 0.5);
+            const labelText = this.add.text(circleX + 16, hintY, '', TEXT_STYLE).setOrigin(0, 0.5);
+            this.makeGlossable(labelText, 'trade');
+            this.setGlossLabel(labelText, label);
             this.trade.add([ circle, letterText, labelText ]);
         });
 
@@ -553,20 +586,33 @@ export class Overlay extends Scene
             });
             line.on('pointerdown', () => this.clickChoice(name, i));
 
-            // Gloss button: a small dark square with a white outline.
-            // It turns blue while the line shows English.
-            const button = this.add.rectangle(GLOSS_X, top + LINE_HEIGHT / 2 - 1, GLOSS_SIZE, GLOSS_SIZE, COLOR_EMPTY)
-                .setStrokeStyle(1, 0xffffff);
-            button.setInteractive({ useHandCursor: true });
-
-            const gloss = { line, label: item.label, button, english: false };
-            button.on('pointerdown', () => this.clickGloss(name, gloss));
+            const gloss = { line, label: item.label, english: false };
+            Object.assign(gloss, this.makeGlossButton(top, () => this.clickGloss(name, gloss)));
             glosses.push(gloss);
 
-            container.add([ line, button ]);
+            container.add([ line, gloss.button ]);
         });
 
         return { container, items, highlight, chosen: 0, glosses };
+    }
+
+    // Makes a gloss button for the menu line that starts at the height "top":
+    // a small dark square with a white outline and a "?" in it.
+    // It turns blue while the line shows English.
+    // Returns { button, box }: button = square and "?" together (to show/hide them),
+    // box = the square (to change its color).
+    makeGlossButton (top, onClick)
+    {
+        const y = top + LINE_HEIGHT / 2 - 1;
+        const box = this.add.rectangle(GLOSS_X, y, GLOSS_SIZE, GLOSS_SIZE, COLOR_EMPTY).setStrokeStyle(1, 0xffffff);
+        const sign = this.add.text(GLOSS_X, y, '?', { ...TEXT_STYLE, fontSize: 9 }).setOrigin(0.5);
+
+        box.setInteractive({ useHandCursor: true });
+        box.on('pointerdown', onClick);
+
+        const button = this.add.container(0, 0, [ box, sign ]);
+        button.setVisible(getAuxLanguage(this) === 'en');
+        return { button, box };
     }
 
     // A gloss button was clicked: switch its line between Nahuatl and English.
@@ -589,7 +635,7 @@ export class Overlay extends Scene
     {
         gloss.line.setText(gloss.english ? english(gloss.label) : nahuatl(gloss.label));
         gloss.line.setColor(gloss.english ? COLOR_GLOSS : TEXT_STYLE.color);
-        gloss.button.setFillStyle(gloss.english ? COLOR_USED : COLOR_EMPTY);
+        gloss.box.setFillStyle(gloss.english ? COLOR_USED : COLOR_EMPTY);
     }
 
     // Puts every menu line back to Nahuatl, and shows the gloss buttons
@@ -606,6 +652,87 @@ export class Overlay extends Scene
                 gloss.button.setVisible(showButtons);
             });
         });
+    }
+
+    // ---------- Glosses on single texts (overlay words, hints, dialogue, fishing word) ----------
+
+    // Makes a text clickable: a click switches it between Nahuatl and English
+    // (only with English chosen in Settings). It does nothing else, and no key does this.
+    // group = when the text goes back to Nahuatl by itself:
+    //   'menu' / 'trade' / 'dialogue' = whenever that window opens,
+    //   nothing = only when the text itself changes (see setGlossLabel).
+    // Every text goes back to Nahuatl when the auxiliary language changes.
+    makeGlossable (textObject, group = null)
+    {
+        textObject.setInteractive();
+        textObject.gloss = { label: null, english: false, group };
+        textObject.on('pointerdown', () => this.clickGlossText(textObject));
+        this.glossTexts.push(textObject);
+        this.updateGlossCursor(textObject);
+        return textObject;
+    }
+
+    // Puts a new text into a clickable text, in Nahuatl.
+    // label = { nah: ..., en: ... }, or null for no text.
+    setGlossLabel (textObject, label)
+    {
+        textObject.gloss.label = label;
+        textObject.gloss.english = false;
+        this.showGlossText(textObject);
+    }
+
+    // Writes a clickable text in Nahuatl, or in English (in the gloss color).
+    showGlossText (textObject)
+    {
+        const { label, english: showEnglish } = textObject.gloss;
+
+        textObject.setText(label ? (showEnglish ? english(label) : nahuatl(label)) : '');
+        textObject.setColor(showEnglish ? COLOR_GLOSS : TEXT_STYLE.color);
+
+        // The clickable area is as big as the text, so it changes with the text.
+        textObject.input.hitArea.setSize(textObject.width, textObject.height);
+    }
+
+    // A clickable text was clicked: switch between Nahuatl and English.
+    clickGlossText (textObject)
+    {
+        if (getAuxLanguage(this) !== 'en' || !textObject.gloss.label)
+        {
+            return;
+        }
+
+        textObject.gloss.english = !textObject.gloss.english;
+        this.showGlossText(textObject);
+    }
+
+    // Puts the clickable texts of one group back to Nahuatl (all of them if group is null).
+    resetGlossTexts (group = null)
+    {
+        this.glossTexts
+            .filter((t) => group === null || t.gloss.group === group)
+            .forEach((t) => {
+                t.gloss.english = false;
+                this.showGlossText(t);
+                this.updateGlossCursor(t);
+            });
+    }
+
+    // The mouse pointer turns into a hand over a clickable text, but only
+    // with English chosen in Settings (without it, clicking does nothing).
+    updateGlossCursor (textObject)
+    {
+        textObject.input.cursor = getAuxLanguage(this) === 'en' ? 'pointer' : false;
+    }
+
+    // A slot word as { nah, en }, from src/data/wordlist.json (null for an empty slot).
+    slotLabel (word)
+    {
+        if (word === null)
+        {
+            return null;
+        }
+        const entry = wordList.find((e) => e.word === word);
+        return { nah: word, en: entry ? entry.en : undefined };
     }
 
     // Moves the white square on the Settings page next to the chosen language.
@@ -637,7 +764,6 @@ export class Overlay extends Scene
         const container = this.pages.bag.container;
         container.removeAll(true); // take away what was written last time
         this.pages.bag.glosses = [];
-        const showButtons = getAuxLanguage(this) === 'en';
 
         const bag = this.scene.get('TestRoom').bag;
         const owned = items.filter((item) => (bag[item.id] ?? 0) > 0);
@@ -656,16 +782,11 @@ export class Overlay extends Scene
             const amount = this.add.text(GLOSS_X - GLOSS_SPACE, top, String(bag[item.id]), TEXT_STYLE).setOrigin(1, 0);
 
             // Gloss button, like on the other menu pages: switches the name to English and back.
-            const button = this.add.rectangle(GLOSS_X, top + LINE_HEIGHT / 2 - 1, GLOSS_SIZE, GLOSS_SIZE, COLOR_EMPTY)
-                .setStrokeStyle(1, 0xffffff)
-                .setVisible(showButtons);
-            button.setInteractive({ useHandCursor: true });
-
-            const gloss = { line: name, label: item.name, button, english: false };
-            button.on('pointerdown', () => this.clickGloss('bag', gloss));
+            const gloss = { line: name, label: item.name, english: false };
+            Object.assign(gloss, this.makeGlossButton(top, () => this.clickGloss('bag', gloss)));
             this.pages.bag.glosses.push(gloss);
 
-            container.add([ picture, name, amount, button ]);
+            container.add([ picture, name, amount, gloss.button ]);
         });
 
         // Nothing in the bag: "Your bag is empty."
@@ -685,6 +806,7 @@ export class Overlay extends Scene
         // The menu always opens on the main page, with the first choice marked,
         // and with every line in Nahuatl.
         this.resetGlosses();
+        this.resetGlossTexts('menu');
         this.pages.main.chosen = 0;
         this.showPage('main');
 
@@ -793,6 +915,7 @@ export class Overlay extends Scene
         {
             setAuxLanguage(this, item.language);
             this.resetGlosses();
+            this.resetGlossTexts();
             this.updateSettingsMark();
             return;
         }
@@ -964,7 +1087,7 @@ export class Overlay extends Scene
             slot.letterLabel.setVisible(keep);
             slot.wordLabel.setVisible(keep);
         });
-        this.slots[this.fishingSlot].wordLabel.setText(nahuatl(menuText.buttons.cancel));
+        this.setGlossLabel(this.slots[this.fishingSlot].wordLabel, menuText.buttons.cancel);
     }
 
     // Puts all three circles back to normal after fishing: visible, each with its own word.
@@ -976,7 +1099,7 @@ export class Overlay extends Scene
             slot.circle.setVisible(true);
             slot.letterLabel.setVisible(true);
             slot.wordLabel.setVisible(true);
-            slot.wordLabel.setText(slot.word ?? '');
+            this.setGlossLabel(slot.wordLabel, this.slotLabel(slot.word));
         });
     }
 
@@ -1061,6 +1184,7 @@ export class Overlay extends Scene
         ui.add([ barBack, bar ]);
 
         this.minigame = {
+            entry,                    // the word from src/data/fishing-words.json
             ui,
             boxes,
             parts,
@@ -1144,6 +1268,9 @@ export class Overlay extends Scene
     // wrongBox = true if it failed because a wrong box was pressed (not because time ran out).
     finishMinigame (success, wrongBox = false)
     {
+        // Caught or not: the whole word appears for a moment.
+        this.showFishWord(this.minigame.entry);
+
         if (success)
         {
             this.closeMinigame();
@@ -1213,6 +1340,36 @@ export class Overlay extends Scene
         });
     }
 
+    // Shows the whole fishing word above the boxes for a moment (FISH_WORD_TIME),
+    // e.g. "Chichiltic". Clicking it shows its gloss (the "meaning" in fishing-words.json).
+    // It doesn't stop anything: you can walk and use your powers while it's there.
+    showFishWord (entry)
+    {
+        this.removeFishWord(); // only one at a time
+
+        const w = this.scale.width;
+        const h = this.scale.height;
+
+        const text = this.add.text(w / 2, h / 2 - BOX_HEIGHT / 2 - 14, '', TEXT_STYLE).setOrigin(0.5);
+        this.makeGlossable(text);
+        this.setGlossLabel(text, { nah: entry.word, en: entry.meaning });
+
+        const timer = this.time.delayedCall(FISH_WORD_TIME, () => this.removeFishWord());
+        this.fishWord = { text, timer };
+    }
+
+    // Takes the fishing word off the screen (if it's there).
+    removeFishWord ()
+    {
+        if (this.fishWord)
+        {
+            this.fishWord.timer.remove();
+            this.glossTexts = this.glossTexts.filter((t) => t !== this.fishWord.text);
+            this.fishWord.text.destroy();
+            this.fishWord = null;
+        }
+    }
+
     // Removes the minigame from the screen.
     closeMinigame ()
     {
@@ -1233,12 +1390,12 @@ export class Overlay extends Scene
     updateEnterLabel ()
     {
         const words = {
-            play: nahuatl(menuText.buttons.menu),
-            prompt: nahuatl(menuText.buttons.confirm),
-            menu: nahuatl(menuText.buttons.close),
-            trade: nahuatl(menuText.buttons.close)
+            play: menuText.buttons.menu,
+            prompt: menuText.buttons.confirm,
+            menu: menuText.buttons.close,
+            trade: menuText.buttons.close
         };
-        let word = words[this.mode] ?? '';
+        let word = words[this.mode] ?? null;
 
         // While sleeping, talking (Ihtoa) or with the dialogue box open,
         // Enter does nothing either, so it's hidden too.
@@ -1247,12 +1404,13 @@ export class Overlay extends Scene
         this.enterButton.setVisible(!hidden);
         if (hidden)
         {
-            word = '';
+            word = null;
         }
 
-        if (this.enterLabel.text !== word)
+        // Only when the word changes (then it's back in Nahuatl).
+        if (this.enterLabel.gloss.label !== word)
         {
-            this.enterLabel.setText(word);
+            this.setGlossLabel(this.enterLabel, word);
         }
     }
 
@@ -1301,6 +1459,7 @@ export class Overlay extends Scene
         this.tradeGoods = goods;
         this.tradeChosen = 0;
         this.tradeMessage.setText('');
+        this.resetGlossTexts('trade');
         this.stopPickingAmount(); // always start by choosing an item
         this.fillTradeLines();
 
@@ -1550,18 +1709,20 @@ export class Overlay extends Scene
 
     // Called by the room when the player talks to an NPC: shows what the NPC says.
     // While the box is open, the player can't walk, use powers or open the menu.
+    // text = what the NPC says, as { nah: ..., en: ... } (from src/data/npcs.json or menu.json).
     // afterClose (optional) = what should happen when the box is closed,
     // e.g. opening the shop window after the merchant has asked what you want.
     openDialogue (text, afterClose = null)
     {
         this.mode = 'dialogue';
-        this.dialogueText.setText(text);
+        this.resetGlossTexts('dialogue');
+        this.setGlossLabel(this.dialogueText, text);
         this.dialogue.setVisible(true);
         this.qweButtons.setVisible(false);
         this.dialogueAfterClose = afterClose;
     }
 
-    // q (or a click on the box) closes the dialogue box.
+    // q (or a click on the advance symbol) closes the dialogue box.
     closeDialogue ()
     {
         if (this.mode !== 'dialogue')
@@ -1608,6 +1769,6 @@ export class Overlay extends Scene
         const slot = this.slots[letter];
         slot.word = word;
         slot.circle.setFillStyle(word ? COLOR_USED : COLOR_EMPTY);
-        slot.wordLabel.setText(word ?? '');
+        this.setGlossLabel(slot.wordLabel, this.slotLabel(word));
     }
 }

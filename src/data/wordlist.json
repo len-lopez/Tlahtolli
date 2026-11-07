@@ -1,9 +1,9 @@
 [
-    { "word": "Choloa", "action": "jump" },
-    { "word": "Michma", "action": "fish" },
-    { "word": "Cochi", "action": "sleep" },
-    { "word": "Ihtoa", "action": "talk" },
-    { "word": "Itta", "action": "inspect" },
-    { "word": "Cohua", "action": "buy" },
-    { "word": "Namaca", "action": "sell" }
+    { "word": "Choloa", "en": "jump", "action": "jump" },
+    { "word": "Michma", "en": "fish", "action": "fish" },
+    { "word": "Cochi", "en": "sleep", "action": "sleep" },
+    { "word": "Ihtoa", "en": "speak", "action": "talk" },
+    { "word": "Itta", "en": "look", "action": "inspect" },
+    { "word": "Cohua", "en": "buy", "action": "buy" },
+    { "word": "Namaca", "en": "sell", "action": "sell" }
 ]
