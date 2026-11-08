@@ -10,7 +10,8 @@
     "map": [
         { "room": 1, "label": { "nah": "Nochan", "en": "Home" } },
         { "room": 2, "label": { "nah": "Tlapalapan", "en": "Lake of Colors" } },
-        { "room": 0, "label": { "nah": "Tianquizco", "en": "Marketplace" } }
+        { "room": 0, "label": { "nah": "Tianquizco", "en": "Marketplace" } },
+        { "room": 3, "label": { "nah": "Inside", "en": "Inside" } }
     ],
     "save": [
         { "id": "download", "label": { "nah": "Xiquixti in motlapial", "en": "Download your save file" } },
