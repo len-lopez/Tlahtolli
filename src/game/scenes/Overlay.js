@@ -259,6 +259,10 @@ export class Overlay extends Scene
         // (see makeGlossable).
         this.glossTexts = [];
 
+        // Only one gloss can show English at a time, in the whole game (see openOnlyThisGloss).
+        // openGloss = the one that shows English right now, or null.
+        this.openGloss = null;
+
         // --- q / w / e slots on the left edge ---
         // Each slot is either empty (word = null) or used (word = a word from the list).
         this.slots = {};
@@ -831,7 +835,31 @@ export class Overlay extends Scene
         }
 
         gloss.english = !gloss.english;
+        if (gloss.english)
+        {
+            this.openOnlyThisGloss(gloss, () => {
+                if (gloss.english && gloss.box.active)
+                {
+                    gloss.english = false;
+                    this.showGloss(gloss);
+                }
+            });
+        }
         this.showGloss(gloss);
+    }
+
+    // Only one gloss can show English at a time, in the whole game.
+    // Called when a gloss (a menu line's gloss button or a clickable text) switches to English:
+    // the gloss that was showing English before goes back to Nahuatl.
+    // owner = the gloss that switches to English now.
+    // turnOff = how to put it back to Nahuatl later, when another gloss is opened.
+    openOnlyThisGloss (owner, turnOff)
+    {
+        if (this.openGloss && this.openGloss.owner !== owner)
+        {
+            this.openGloss.turnOff();
+        }
+        this.openGloss = { owner, turnOff };
     }
 
     // Writes a line in Nahuatl or English, and colors its gloss button to match.
@@ -960,6 +988,16 @@ export class Overlay extends Scene
         }
 
         textObject.gloss.english = !textObject.gloss.english;
+        if (textObject.gloss.english)
+        {
+            this.openOnlyThisGloss(textObject, () => {
+                if (textObject.gloss.english && textObject.active)
+                {
+                    textObject.gloss.english = false;
+                    this.showGlossText(textObject);
+                }
+            });
+        }
         this.showGlossText(textObject);
     }
 
