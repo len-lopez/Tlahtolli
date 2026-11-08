@@ -562,6 +562,16 @@ export class Overlay extends Scene
         // Every key press goes through here.
         this.input.keyboard.on('keydown', (event) => this.handleKey(event));
 
+        // For powers that only work while held down (Maneloa): the game can ask these
+        // whether q, w or e is still down. (false = don't stop the browser from using the keys.)
+        this.holdKeys = this.input.keyboard.addKeys({ q: 'Q', w: 'W', e: 'E' }, false);
+
+        // The slot (q, w or e) that started swimming, and whether it was started by
+        // clicking its circle (then holding the mouse button counts) instead of the key.
+        this.swimSlot = null;
+        this.swimByClick = false;
+        this.clickingSlot = false;
+
         // When the overlay is restarted (after loading a save file),
         // stop listening with the old one so no key is handled twice.
         // (Same care as in the room: only if the keyboard is still there at that moment.)
@@ -728,7 +738,24 @@ export class Overlay extends Scene
             return;
         }
 
+        // Remembered while the click is handled, so Maneloa knows it was started by a click.
+        this.clickingSlot = true;
         this.handleKey({ key: letter, repeat: false, shiftKey: pointer.event.shiftKey });
+        this.clickingSlot = false;
+    }
+
+    // Is Maneloa still held down? Asked by the room in every frame while swimming.
+    // Its key (or, if it was started by clicking the circle, the mouse button) must still be down,
+    // and nothing else may have opened (menu, dialogue, ...).
+    isHoldingSwim ()
+    {
+        if (this.swimSlot === null || this.mode !== 'play')
+        {
+            return false;
+        }
+        return this.swimByClick
+            ? this.input.activePointer.isDown
+            : this.holdKeys[this.swimSlot].isDown;
     }
 
     // Looks up the word's action in the word list and tells the room to do it.
@@ -742,6 +769,14 @@ export class Overlay extends Scene
             // Remember which key it was: if this throws out the fishing line,
             // the same key pulls it in again (see startFishing).
             this.lastUsedSlot = letter;
+
+            // Maneloa: remember how it was started, to know when it's let go (see isHoldingSwim).
+            if (entry.action === 'swim')
+            {
+                this.swimSlot = letter;
+                this.swimByClick = this.clickingSlot;
+            }
+
             this.scene.get('TestRoom').doAction(entry.action);
         }
     }

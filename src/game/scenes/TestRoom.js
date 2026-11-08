@@ -502,6 +502,16 @@ const SLEEP_TIME = 3000;
 // How often a new "z" floats up while sleeping, in milliseconds.
 const SLEEP_Z_EVERY = 600;
 
+// --- Swimming (Maneloa) ---
+// Works only while the key (or circle) is held down.
+// How fast the player rises to the top of the water, in pixels per second.
+const SWIM_RISE_SPEED = 60;
+// How far the swimming player sinks into the water, in pixels: the lying body is
+// 12 pixels high, so 6 = half under water. (Only how it looks; you float on the surface.)
+const SWIM_SINK = 6;
+// How long one swimming stroke takes (the arm going forward and back), in milliseconds.
+const SWIM_STROKE_TIME = 300;
+
 // A random whole number from min to max (both included).
 function randomBetween (min, max)
 {
@@ -715,6 +725,9 @@ export class TestRoom extends Scene
         // While sleeping: the lying-down player and the z-timer. null when awake.
         this.sleep = null;
 
+        // While swimming (Maneloa held down): the swimming player and its arm. null otherwise.
+        this.swimming = null;
+
         // Remembered for fishing: the ground layer (to look up tiles) and where the ground starts.
         this.floor = floor;
         this.floorTop = floorTop;
@@ -890,6 +903,14 @@ export class TestRoom extends Scene
         else if (action === 'buy' || action === 'sell')
         {
             this.trade(action);
+        }
+        else if (action === 'swim')
+        {
+            // Maneloa: swim for as long as the key is held down (see update).
+            if (!this.swimming)
+            {
+                this.startSwimming();
+            }
         }
         else if (action === 'sleep')
         {
@@ -1543,6 +1564,11 @@ export class TestRoom extends Scene
     updateFace ()
     {
         this.eye.setPosition(this.player.x + this.facing * 3, this.player.y - 7);
+
+        if (this.swimming)
+        {
+            this.placeSwimmer();
+        }
 
         if (this.talking)
         {
@@ -2557,6 +2583,101 @@ export class TestRoom extends Scene
         this.scene.get('Overlay').showLife(this.life);
     }
 
+    // ---------- Swimming (Maneloa) ----------
+
+    // Maneloa is pressed: the player starts swimming.
+    // Placeholder look: like sleeping, the standing rectangle is hidden and a lying one
+    // is shown instead, with a small eye at the front and a darker "arm" that keeps
+    // moving forward and back along its top (the swimming stroke).
+    // On land or in the air it's only this animation; in the water you float (see updateSwimming).
+    startSwimming ()
+    {
+        this.player.setVisible(false);
+        this.eye.setVisible(false);
+
+        const body = this.add.rectangle(0, 0, 24, 12, 0x2ecc71);
+        const eye = this.add.rectangle(0, 0, 3, 2, 0x111111);
+        const arm = this.add.rectangle(0, 0, 3, 6, 0x1e8449);
+
+        // stroke goes from -1 (arm at the back) to 1 (arm at the front) and back, again and again.
+        const swimmer = { body, eye, arm, stroke: -1 };
+        swimmer.tween = this.tweens.add({
+            targets: swimmer,
+            stroke: 1,
+            duration: SWIM_STROKE_TIME / 2,
+            yoyo: true,
+            repeat: -1
+        });
+
+        this.swimming = swimmer;
+        this.placeSwimmer();
+    }
+
+    // Puts the swimming player where the (hidden) standing player is: lying on its feet.
+    // Over the water it's drawn a little lower (SWIM_SINK), so it looks half under water.
+    placeSwimmer ()
+    {
+        const s = this.swimming;
+        const body = this.player.body;
+        const sink = this.waterAt(this.player.x) ? SWIM_SINK : 0;
+        const y = body.bottom - 6 + sink;
+
+        s.body.setPosition(this.player.x, y);
+        s.eye.setPosition(this.player.x + this.facing * 9, y - 2);
+        s.arm.setPosition(this.player.x + s.stroke * 7, y - 6);
+    }
+
+    // Maneloa is let go: the player stands up again (and sinks, if in the water).
+    stopSwimming ()
+    {
+        if (!this.swimming)
+        {
+            return;
+        }
+
+        this.swimming.tween.remove();
+        this.swimming.body.destroy();
+        this.swimming.eye.destroy();
+        this.swimming.arm.destroy();
+        this.swimming = null;
+
+        this.player.setVisible(true);
+        this.eye.setVisible(true);
+        this.player.body.setAllowGravity(true);
+    }
+
+    // Called every frame while swimming.
+    // Over the water: below the surface, the player rises (SWIM_RISE_SPEED);
+    // at the surface, the player stays there and can swim left and right.
+    // Above the water (jumping or falling in) or over land: nothing special, normal falling.
+    updateSwimming ()
+    {
+        const body = this.player.body;
+        const surface = this.floorTop; // the top of the water
+
+        if (!this.waterAt(this.player.x) || body.bottom < surface - 1)
+        {
+            body.setAllowGravity(true);
+            return;
+        }
+
+        // Under the water (or just reaching the top): no falling while swimming.
+        body.setAllowGravity(false);
+
+        if (body.bottom > surface + 1)
+        {
+            // Under water: rise.
+            body.setVelocityY(-SWIM_RISE_SPEED);
+        }
+        else
+        {
+            // At the top: stay exactly on the surface.
+            // (reset puts the player there and stops all movement; walking left/right
+            // is set again right after this, in update.)
+            body.reset(this.player.x, surface - body.height / 2);
+        }
+    }
+
     // Placeholder "that didn't work" animation: the player wobbles a few times.
     failAction ()
     {
@@ -2751,6 +2872,19 @@ export class TestRoom extends Scene
 
         this.moveFishes(delta);
         this.updateFishing(delta);
+
+        // Swimming (Maneloa) only lasts while its key or circle is held down.
+        if (this.swimming)
+        {
+            if (this.scene.get('Overlay').isHoldingSwim())
+            {
+                this.updateSwimming();
+            }
+            else
+            {
+                this.stopSwimming();
+            }
+        }
 
         // Fell completely off the bottom of the screen (= into the water): lose life points.
         if (this.player.body.top > this.mapHeight)
