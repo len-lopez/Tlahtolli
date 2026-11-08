@@ -27,21 +27,54 @@
     "judge": {
         "line": { "nah": "Tianquizpan nitlayacanqui.", "en": "I am the leader of the market." },
         "inspect": { "nah": "Ca tianquizpan tlayacanqui.", "en": "It's the leader of the market." },
-        "request": { "nah": "(demo) Will you help me survey the merchandise? I'll pay you in cacao.", "en": "Will you help me survey the merchandise in the market? I'll pay you in cacao." },
+        "request": { "words": [
+            { "nah": "Cuix", "en": null },
+            { "nah": "nopampa", "en": "for me" },
+            { "nah": "titlapohuaz?", "en": "will you count?" },
+            { "nah": "Cacahuatica", "en": "With cacao" },
+            { "nah": "nimitztlaxtlahuiz.", "en": "I will pay you." }
+        ] },
         "order": { "words": [
-            { "nah": "(demo) Go down to the market and count all the", "en": "Go down to the market and count all the" },
+            { "nah": "Xitemo", "en": "Go down" },
+            { "nah": "tianquizco", "en": "to the market" },
+            { "nah": "ihuan", "en": "and" },
+            { "nah": "xicpohua", "en": "count" },
+            { "nah": "in", "en": null },
+            { "nah": "ixquich", "en": "all the" },
             { "slot": "item", "end": "." },
-            { "nah": "Then come back and report to me.", "en": "Then come back and report to me." }
+            { "nah": "Zatepan", "en": "Afterwards" },
+            { "nah": "xihualmocuepa", "en": "come back" },
+            { "nah": "ihuan", "en": "and" },
+            { "nah": "xinechilhui.", "en": "tell me." }
         ] },
-        "countedAll": { "nah": "(demo) Did you count them all?", "en": "Did you count them all?" },
+        "countedAll": { "words": [
+            { "nah": "Cuix", "en": null },
+            { "nah": "ye", "en": "already" },
+            { "nah": "oticpouh", "en": "you counted it" },
+            { "nah": "in", "en": null },
+            { "nah": "mochi?", "en": "all?" }
+        ] },
         "howMany": { "words": [
-            { "nah": "(demo) How many", "en": "How many" },
+            { "nah": "Quezqui", "en": "How many" },
             { "slot": "item", "end": "" },
-            { "nah": "are there?", "en": "are there?" }
+            { "nah": "onoc?", "en": "are there?" }
         ] },
-        "paid": { "nah": "(demo) Well done! Here is your cacao.", "en": "Well done! Here is your cacao." },
-        "requestAgain": { "nah": "(demo) Will you count something else for me?", "en": "Will you count something else for me?" },
-        "allDone": { "nah": "(demo) Thank you, that is everything.", "en": "Thank you, that is everything." },
+        "paid": { "words": [
+            { "nah": "Cualli!", "en": "Good!" },
+            { "nah": "Izcatqui", "en": "Here is" },
+            { "nah": "in", "en": null },
+            { "nah": "mocacahuauh.", "en": "your cacao." }
+        ] },
+        "requestAgain": { "words": [
+            { "nah": "Cuix", "en": null },
+            { "nah": "oc centlamantli", "en": "one more thing" },
+            { "nah": "tinechpohuiliz?", "en": "will you count for me?" }
+        ] },
+        "allDone": { "words": [
+            { "nah": "Tlazohcamati.", "en": "Thank you." },
+            { "nah": "Ye", "en": "Already" },
+            { "nah": "ixquich.", "en": "everything." }
+        ] },
         "countAgain": { "nah": "(demo) That's not right. Go and count again.", "en": "That's not right. Go and count again." },
         "deceive": { "nah": "(demo) Are you trying to deceive me?", "en": "Are you trying to deceive me?" },
         "goAway": { "nah": "(demo) Go away!", "en": "Go away!" }
