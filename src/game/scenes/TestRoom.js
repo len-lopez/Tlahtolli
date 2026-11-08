@@ -12,6 +12,11 @@ import { createProgress, recordAnswer } from '../progress.js';
 // Size of one tile in pixels. Tiled maps will use the same size later.
 const TILE = 16;
 
+// Drawing order ("depth"): things with a higher number are drawn in front.
+// The player (standing, lying, swimming) is drawn in front of everything in the world
+// (NPCs, the boat, the counting animations in the Marketplace, ...); its eye just in front of it.
+const PLAYER_DEPTH = 10;
+
 // The room as a grid of tiles: 32 tiles wide, 18 tiles high (= one screen).
 // Later this grid will come from a map you draw in Tiled.
 const ROOM_WIDTH = 32;
@@ -519,7 +524,7 @@ const SWIM_LAND_SPEED = 0.25;
 // Placeholder shape: wider at the top than at the bottom, with the two ends a bit raised.
 // It sticks out of the water, so you have to jump onto it (Choloa).
 // The part under the water is covered by see-through water, so it looks different,
-// and you can swim past the boat (in front of the water, behind the boat).
+// and you can swim past the boat (you are drawn in front of it).
 const BOAT_WIDTH = 64;          // in pixels, from tip to tip
 const BOAT_TIP = 4;             // how far each raised end sticks out past the deck, and up from it
 const BOAT_ABOVE = 10;          // how high the deck (where you stand) is above the water
@@ -716,7 +721,7 @@ export class TestRoom extends Scene
         // It starts 4 tiles from the left edge of the start room (Home).
         const floorTop = (ROOM_HEIGHT - FLOOR_ROWS) * TILE;
         const start = this.roomSpawn(START_ROOM);
-        this.player = this.add.rectangle(start.x, start.y, 12, 24, 0x2ecc71);
+        this.player = this.add.rectangle(start.x, start.y, 12, 24, 0x2ecc71).setDepth(PLAYER_DEPTH);
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
 
@@ -735,7 +740,7 @@ export class TestRoom extends Scene
 
         // The "face": a small dark eye near the top of the player,
         // on the side the player is looking at.
-        this.eye = this.add.rectangle(0, 0, 2, 3, 0x111111);
+        this.eye = this.add.rectangle(0, 0, 2, 3, 0x111111).setDepth(PLAYER_DEPTH + 1);
         this.updateFace();
 
         // Move the eye after the player has moved in each frame,
@@ -2643,7 +2648,7 @@ export class TestRoom extends Scene
 
         // The lying player: same size and color, just turned on its side (24 wide, 12 high),
         // lying on the floor where the player stood.
-        const lying = this.add.rectangle(this.player.x, body.bottom - 6, 24, 12, 0x2ecc71);
+        const lying = this.add.rectangle(this.player.x, body.bottom - 6, 24, 12, 0x2ecc71).setDepth(PLAYER_DEPTH);
 
         // A new "z" every SLEEP_Z_EVERY milliseconds, starting with one right away.
         const zTimer = this.time.addEvent({
@@ -2684,7 +2689,7 @@ export class TestRoom extends Scene
             fontFamily: 'Arial',
             fontSize: 10,
             color: '#ffffff'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(PLAYER_DEPTH + 1);
 
         this.tweens.add({
             targets: z,
@@ -2748,7 +2753,7 @@ export class TestRoom extends Scene
         this.physics.add.collider(this.player, this.boat);
 
         // The boat shape, drawn once. Its (0, 0) is the deck's left end, at deck height.
-        // Drawn in front of the player (depth 1), so you swim behind it.
+        // (Depth 1: in front of the water tiles, behind the player.)
         const hull = this.add.graphics().setDepth(1);
         const bottomInset = (BOAT_WIDTH - BOAT_BOTTOM_WIDTH) / 2;
         const depth = BOAT_ABOVE + BOAT_BELOW;
@@ -2890,9 +2895,9 @@ export class TestRoom extends Scene
         this.player.setVisible(false);
         this.eye.setVisible(false);
 
-        const body = this.add.rectangle(0, 0, 24, 12, 0x2ecc71);
-        const eye = this.add.rectangle(0, 0, 3, 2, 0x111111);
-        const arm = this.add.rectangle(0, 0, 3, 6, 0x1e8449);
+        const body = this.add.rectangle(0, 0, 24, 12, 0x2ecc71).setDepth(PLAYER_DEPTH);
+        const eye = this.add.rectangle(0, 0, 3, 2, 0x111111).setDepth(PLAYER_DEPTH + 1);
+        const arm = this.add.rectangle(0, 0, 3, 6, 0x1e8449).setDepth(PLAYER_DEPTH + 1);
 
         // stroke goes from -1 (arm at the back) to 1 (arm at the front) and back, again and again.
         const swimmer = { body, eye, arm, stroke: -1 };
@@ -2944,8 +2949,13 @@ export class TestRoom extends Scene
         this.swimming.arm.destroy();
         this.swimming = null;
 
-        this.player.setVisible(true);
-        this.eye.setVisible(true);
+        // The standing player comes back, unless the player fell asleep (Cochi):
+        // then only the sleeping one is shown.
+        if (!this.sleep)
+        {
+            this.player.setVisible(true);
+            this.eye.setVisible(true);
+        }
         this.player.body.setAllowGravity(true);
     }
 
