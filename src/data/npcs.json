@@ -47,7 +47,13 @@
             { "nah": "ihuan", "en": "and" },
             { "nah": "xinechilhui.", "en": "tell me." }
         ] },
-        "countedAll": { "nah": "(demo) Did you count them all?", "en": "Did you count them all?" },
+        "countedAll": { "words": [
+            { "nah": "Cuix", "en": null },
+            { "nah": "ye", "en": "already" },
+            { "nah": "oticpouh", "en": "counted it" },
+            { "nah": "in", "en": null },
+            { "nah": "mochi?", "en": "all?" }
+        ] },
         "howMany": { "words": [
             { "nah": "(demo) How many", "en": "How many" },
             { "slot": "item", "end": "" },
