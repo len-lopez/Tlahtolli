@@ -1,0 +1,14 @@
+{
+    "tree": {
+        "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "cuahuitl.", "en": "tree." } ] }
+    },
+    "chiquihuitl": {
+        "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "chiquihuitl.", "en": "basket." } ] }
+    },
+    "comitl": {
+        "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "comitl.", "en": "pot." } ] }
+    },
+    "ayohtli": {
+        "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "ayohtli.", "en": "pumpkin." } ] }
+    }
+}
