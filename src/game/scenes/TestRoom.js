@@ -514,6 +514,23 @@ const SWIM_STROKE_TIME = 300;
 // Swimming on land or in the air: you move at this part of the normal speed (0.25 = a quarter).
 const SWIM_LAND_SPEED = 0.25;
 
+// --- The boat and steering it (Neloa) ---
+// A small boat in the easternmost water, right next to its western shore.
+// Its top (where you stand) is level with the land, so you can walk onto it.
+const BOAT_WIDTH = 40;          // in pixels
+const BOAT_HEIGHT = 8;          // in pixels, from the top of the water down
+const COLOR_BOAT = 0x7a4a24;
+// How fast the boat moves while steering, in pixels per second.
+const BOAT_SPEED = 60;
+// The steering animation: a paddle at the player's back that swings back and forth.
+const PADDLE_LENGTH = 20;       // in pixels
+const PADDLE_SWING = 25;        // how far it swings to each side, in degrees
+const PADDLE_SWING_TIME = 400;  // one swing to one side, in milliseconds
+const COLOR_PADDLE = 0x6b4423;
+// Neloa away from the boat: the steering animation plays this long,
+// and nothing else can be done meanwhile (milliseconds).
+const ROW_FAIL_TIME = 1500;
+
 // A random whole number from min to max (both included).
 function randomBetween (min, max)
 {
@@ -733,6 +750,11 @@ export class TestRoom extends Scene
         // wobble: you sink, and swimming goes on when the wobble is over.
         this.swimPaused = false;
 
+        // While steering the boat (Neloa): { paddle }. null otherwise.
+        this.rowing = null;
+        // While steering without a boat (Neloa away from the boat): { paddle, timer }. null otherwise.
+        this.rowFail = null;
+
         // Remembered for fishing: the ground layer (to look up tiles) and where the ground starts.
         this.floor = floor;
         this.floorTop = floorTop;
@@ -761,6 +783,9 @@ export class TestRoom extends Scene
             top.body.checkCollision.right = false;
             this.physics.add.collider(this.player, top, null, () => this.swimming !== null);
         });
+
+        // --- The boat (see BOAT_...) ---
+        this.makeBoat();
 
         // Where the player comes back after falling into a water: standing on the floor,
         // right next to that water's left edge (see fellIntoWater). This is the height.
@@ -905,7 +930,7 @@ export class TestRoom extends Scene
     {
         // While sleeping, during the speech animation, or while going through a door,
         // no power works.
-        if (this.sleep || this.talking || this.transitioning)
+        if (this.sleep || this.talking || this.transitioning || this.rowFail)
         {
             return;
         }
@@ -921,6 +946,19 @@ export class TestRoom extends Scene
         else if (action === 'buy' || action === 'sell')
         {
             this.trade(action);
+        }
+        else if (action === 'row')
+        {
+            // Neloa: on the boat, start steering it (pressing it again stops, see the overlay).
+            // Anywhere else: only the steering animation, and you're stuck for a moment.
+            if (this.isOnBoat())
+            {
+                this.startRowing();
+            }
+            else
+            {
+                this.failRowing();
+            }
         }
         else if (action === 'swim')
         {
@@ -946,8 +984,9 @@ export class TestRoom extends Scene
         {
             // Only jump when standing on the floor, not in mid-air.
             // (While swimming with Maneloa, the top of the water counts as floor too,
-            // so you can jump out of the water there.)
-            if (this.player.body.blocked.down)
+            // so you can jump out of the water there. The boat counts too: "touching" is
+            // what Phaser says for standing on something that can move, like the boat.)
+            if (this.player.body.blocked.down || this.player.body.touching.down)
             {
                 this.stopFishing();
                 this.player.body.setVelocityY(-250);
@@ -1588,6 +1627,12 @@ export class TestRoom extends Scene
         if (this.swimming)
         {
             this.placeSwimmer();
+        }
+
+        const paddle = this.rowing ? this.rowing.paddle : (this.rowFail ? this.rowFail.paddle : null);
+        if (paddle)
+        {
+            this.placePaddle(paddle);
         }
 
         if (this.talking)
@@ -2536,6 +2581,8 @@ export class TestRoom extends Scene
         }
 
         this.stopSwimming();
+        this.stopRowing();
+        this.endRowFail();
 
         if (this.failWobble)
         {
@@ -2624,6 +2671,131 @@ export class TestRoom extends Scene
 
         this.life = MAX_LIFE;
         this.scene.get('Overlay').showLife(this.life);
+    }
+
+    // ---------- The boat (Neloa) ----------
+
+    // Puts the boat into the easternmost water (the last one in this.waters),
+    // right next to its western shore. Its top is level with the land.
+    // You can stand on it (only from above: from below, swimming, you go through it).
+    // It doesn't fall and isn't pushed by the player.
+    makeBoat ()
+    {
+        const water = this.waters[this.waters.length - 1];
+        this.boatWater = water;
+
+        this.boat = this.add.rectangle(water.left, this.floorTop, BOAT_WIDTH, BOAT_HEIGHT, COLOR_BOAT)
+            .setOrigin(0, 0);
+        this.physics.add.existing(this.boat);
+        const body = this.boat.body;
+        body.setAllowGravity(false);
+        body.setImmovable(true);
+        // When the boat moves, it doesn't drag the player along by itself:
+        // while steering, the player is given the boat's speed instead (see moveBoat).
+        body.setFriction(0, 0);
+        body.checkCollision.down = false;
+        body.checkCollision.left = false;
+        body.checkCollision.right = false;
+
+        this.physics.add.collider(this.player, this.boat);
+    }
+
+    // Is the player standing on the boat? (Feet on its top, middle of the player above it.)
+    isOnBoat ()
+    {
+        const body = this.player.body;
+        const boat = this.boat.body;
+        return Math.abs(body.bottom - boat.top) <= 2
+            && this.player.x >= boat.left && this.player.x <= boat.right;
+    }
+
+    // While steering: moves the boat with the left/right keys, but never out of its water.
+    // Returns the boat's speed (pixels per second; minus = to the left), for the player.
+    moveBoat ()
+    {
+        const boat = this.boat.body;
+        let speed = 0;
+        if (this.cursors.left.isDown && boat.left > this.boatWater.left)
+        {
+            speed = -BOAT_SPEED;
+        }
+        else if (this.cursors.right.isDown && boat.right < this.boatWater.right)
+        {
+            speed = BOAT_SPEED;
+        }
+        boat.setVelocityX(speed);
+        return speed;
+    }
+
+    // A paddle (placeholder: a thin brown stick) held at the player's back,
+    // swinging back and forth: the steering animation.
+    makePaddle ()
+    {
+        const paddle = this.add.rectangle(0, 0, 2, PADDLE_LENGTH, COLOR_PADDLE).setOrigin(0.5, 0);
+        paddle.setAngle(-PADDLE_SWING);
+        this.tweens.add({
+            targets: paddle,
+            angle: PADDLE_SWING,
+            duration: PADDLE_SWING_TIME,
+            yoyo: true,
+            repeat: -1
+        });
+        this.placePaddle(paddle);
+        return paddle;
+    }
+
+    // Puts the paddle at the player's back, at hand height.
+    placePaddle (paddle)
+    {
+        paddle.setPosition(this.player.x - this.facing * 6, this.player.y);
+    }
+
+    // Neloa on the boat: steering starts. The player stands still on the boat,
+    // left/right move the boat (see moveBoat), and the other powers are hidden.
+    startRowing ()
+    {
+        this.player.body.setVelocityX(0);
+        this.rowing = { paddle: this.makePaddle() };
+        this.scene.get('Overlay').startRowing();
+    }
+
+    // Neloa pressed again (or cancelled): steering stops, the boat stays where it is.
+    stopRowing ()
+    {
+        if (!this.rowing)
+        {
+            return;
+        }
+
+        this.tweens.killTweensOf(this.rowing.paddle);
+        this.rowing.paddle.destroy();
+        this.rowing = null;
+        this.boat.body.setVelocityX(0);
+        this.scene.get('Overlay').endRowing();
+    }
+
+    // Neloa away from the boat: the steering animation plays for ROW_FAIL_TIME,
+    // and meanwhile you can't walk, use powers or open the menu.
+    failRowing ()
+    {
+        this.player.body.setVelocityX(0);
+        const paddle = this.makePaddle();
+        const timer = this.time.delayedCall(ROW_FAIL_TIME, () => this.endRowFail());
+        this.rowFail = { paddle, timer };
+    }
+
+    // The moment of being stuck is over (or cancelled): the paddle goes away.
+    endRowFail ()
+    {
+        if (!this.rowFail)
+        {
+            return;
+        }
+
+        this.rowFail.timer.remove();
+        this.tweens.killTweensOf(this.rowFail.paddle);
+        this.rowFail.paddle.destroy();
+        this.rowFail = null;
     }
 
     // ---------- Swimming (Maneloa) ----------
@@ -2955,6 +3127,12 @@ export class TestRoom extends Scene
         this.moveFishes(delta);
         this.updateFishing(delta);
 
+        // The boat only moves while it's being steered.
+        if (!this.rowing)
+        {
+            this.boat.body.setVelocityX(0);
+        }
+
         // Swimming (Maneloa) only lasts while its key or circle is held down.
         if (this.swimming || this.swimPaused)
         {
@@ -2970,6 +3148,17 @@ export class TestRoom extends Scene
         if (this.sleep || this.transitioning)
         {
             // While sleeping, or going through a door, you can't walk.
+            this.player.body.setVelocityX(0);
+        }
+        else if (this.rowing)
+        {
+            // Steering the boat: left/right move the boat, and the player stands still on it
+            // (so the player moves exactly as fast as the boat).
+            this.player.body.setVelocityX(this.moveBoat());
+        }
+        else if (this.rowFail)
+        {
+            // Neloa away from the boat: you can't move for a moment.
             this.player.body.setVelocityX(0);
         }
         else if (this.fishing)

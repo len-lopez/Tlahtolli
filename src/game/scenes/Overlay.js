@@ -243,6 +243,7 @@ export class Overlay extends Scene
         // 'reveal'   = catch failed, the boxes and the whole word stay on screen for a moment
         // 'dialogue' = an NPC is talking, the dialogue box is open
         // 'trade'    = the shop window is open (buying with Cohua or selling with Namaca)
+        // 'rowing'   = steering the boat with Neloa (no other powers, no menu)
         this.mode = 'play';
 
         // The fishing minigame while it's running, or null.
@@ -254,6 +255,8 @@ export class Overlay extends Scene
         // The last q/w/e key used for a power, and the key the fishing line was cast with.
         this.lastUsedSlot = null;
         this.fishingSlot = null;
+        // The key Neloa (steering the boat) was started with; pressing it again stops it.
+        this.rowingSlot = null;
 
         // Every single text outside the menu lists that can be clicked for its gloss
         // (see makeGlossable).
@@ -622,6 +625,17 @@ export class Overlay extends Scene
             return;
         }
 
+        if (this.mode === 'rowing')
+        {
+            // Steering the boat: the other powers and the menu can't be used,
+            // but the key that started Neloa stops it again.
+            if (event.key.toLowerCase() === this.rowingSlot)
+            {
+                this.scene.get('TestRoom').stopRowing();
+            }
+            return;
+        }
+
         if (this.mode === 'reveal')
         {
             // After a failed catch: q/w/e powers and the menu stay locked for a moment.
@@ -732,8 +746,10 @@ export class Overlay extends Scene
     {
         // Clicks only count while walking around (not while typing a word or in the menu),
         // and while fishing only on the circle the line was cast with (= pull).
+        // (The same while steering the boat: only the Neloa circle, to stop it.)
         const pullFishing = this.mode === 'fishing' && letter === this.fishingSlot;
-        if ((this.mode !== 'play' && !pullFishing) || !this.qweButtons.visible)
+        const stopRowing = this.mode === 'rowing' && letter === this.rowingSlot;
+        if ((this.mode !== 'play' && !pullFishing && !stopRowing) || !this.qweButtons.visible)
         {
             return;
         }
@@ -1513,6 +1529,34 @@ export class Overlay extends Scene
         this.setGlossLabel(this.slots[this.fishingSlot].wordLabel, menuText.buttons.pull);
     }
 
+    // Called by the room when Neloa starts steering the boat.
+    // Only the circle Neloa was used with stays on screen (pressing it again stops steering);
+    // the other two are hidden, and the other powers and the menu can't be used.
+    startRowing ()
+    {
+        this.mode = 'rowing';
+        this.rowingSlot = this.lastUsedSlot;
+
+        SLOT_KEYS.forEach((letter) => {
+            const slot = this.slots[letter];
+            const keep = letter === this.rowingSlot;
+            slot.circle.setVisible(keep);
+            slot.letterLabel.setVisible(keep);
+            slot.wordLabel.setVisible(keep);
+        });
+    }
+
+    // Called by the room when steering the boat stops: everything back to normal.
+    endRowing ()
+    {
+        if (this.mode === 'rowing')
+        {
+            this.mode = 'play';
+        }
+        this.rowingSlot = null;
+        this.restoreSlots();
+    }
+
     // Puts all three circles back to normal after fishing: visible, each with its own word.
     // (Whether the whole row is shown is decided separately, with qweButtons.)
     restoreSlots ()
@@ -2065,7 +2109,7 @@ export class Overlay extends Scene
         // While sleeping, talking (Ihtoa) or with the dialogue box open,
         // Enter does nothing either, so it's hidden too.
         const fishing = [ 'fishing', 'minigame', 'reveal' ].includes(this.mode);
-        const hidden = fishing || this.mode === 'dialogue' || this.isBusy();
+        const hidden = fishing || this.mode === 'dialogue' || this.mode === 'rowing' || this.isBusy();
         this.enterButton.setVisible(!hidden);
         if (hidden)
         {
@@ -2102,12 +2146,13 @@ export class Overlay extends Scene
         }
     }
 
-    // True while the player is asleep (Cochi) or doing the speech animation (Ihtoa):
+    // True while the player is asleep (Cochi), doing the speech animation (Ihtoa),
+    // or steering without a boat (Neloa away from the boat):
     // then the menu and the powers can't be used. The room knows this.
     isBusy ()
     {
         const room = this.scene.get('TestRoom');
-        return room.sleep !== null || room.talking !== null;
+        return room.sleep !== null || room.talking !== null || room.rowFail !== null;
     }
 
     // ---------- Number entry (three digits) ----------
