@@ -516,10 +516,18 @@ const SWIM_LAND_SPEED = 0.25;
 
 // --- The boat and steering it (Neloa) ---
 // A small boat in the easternmost water, right next to its western shore.
-// Its top (where you stand) is level with the land, so you can walk onto it.
-const BOAT_WIDTH = 40;          // in pixels
-const BOAT_HEIGHT = 8;          // in pixels, from the top of the water down
+// Placeholder shape: wider at the top than at the bottom, with the two ends a bit raised.
+// It sticks out of the water, so you have to jump onto it (Choloa).
+// The part under the water is covered by see-through water, so it looks different,
+// and you can swim past the boat (in front of the water, behind the boat).
+const BOAT_WIDTH = 64;          // in pixels, from tip to tip
+const BOAT_TIP = 4;             // how far each raised end sticks out past the deck, and up from it
+const BOAT_ABOVE = 10;          // how high the deck (where you stand) is above the water
+const BOAT_BELOW = 10;          // how deep the boat goes under the water
+const BOAT_BOTTOM_WIDTH = 44;   // the bottom of the boat is narrower than the top
 const COLOR_BOAT = 0x7a4a24;
+const COLOR_WATER_IN_FRONT = 0x2f6fb5; // same blue as the water tiles
+const WATER_IN_FRONT_ALPHA = 0.6;      // 0 = invisible, 1 = solid
 // How fast the boat moves while steering, in pixels per second.
 const BOAT_SPEED = 60;
 // The steering animation: a paddle at the player's back that swings back and forth.
@@ -1629,6 +1637,19 @@ export class TestRoom extends Scene
             this.placeSwimmer();
         }
 
+        // The boat's look follows its deck.
+        if (this.boatLook)
+        {
+            this.placeBoat();
+        }
+
+        // The sleeping player lies where the player is (so it sinks along, e.g. after
+        // falling asleep while swimming).
+        if (this.sleep)
+        {
+            this.sleep.lying.setPosition(this.player.x, this.player.body.bottom - 6);
+        }
+
         const paddle = this.rowing ? this.rowing.paddle : (this.rowFail ? this.rowFail.paddle : null);
         if (paddle)
         {
@@ -2554,11 +2575,13 @@ export class TestRoom extends Scene
     {
         this.life = Math.max(this.life - WATER_DAMAGE, 0);
 
+        // Whatever was going on stops (also when blacking out).
+        this.cancelEffects();
+
         if (this.life > 0)
         {
             // Which water: the one under the player. (Just in case there's none, the first one.)
             const water = this.waterAt(this.player.x) ?? this.waters[0];
-            this.cancelEffects();
             this.player.body.reset(water.left - 8, this.respawnY);
             this.scene.get('Overlay').showLife(this.life);
         }
@@ -2583,6 +2606,7 @@ export class TestRoom extends Scene
         this.stopSwimming();
         this.stopRowing();
         this.endRowFail();
+        this.cancelSleep();
 
         if (this.failWobble)
         {
@@ -2635,6 +2659,24 @@ export class TestRoom extends Scene
         this.sleep = { lying, zTimer, wakeTimer };
     }
 
+    // Sleep is cancelled (after falling into the water): the player stands up again,
+    // without getting life points back.
+    cancelSleep ()
+    {
+        if (!this.sleep)
+        {
+            return;
+        }
+
+        this.sleep.zTimer.remove();
+        this.sleep.wakeTimer.remove();
+        this.sleep.lying.destroy();
+        this.sleep = null;
+
+        this.player.setVisible(true);
+        this.eye.setVisible(true);
+    }
+
     // One "z" appears above the sleeping player, floats up and fades away.
     floatZ (lying)
     {
@@ -2676,16 +2718,23 @@ export class TestRoom extends Scene
     // ---------- The boat (Neloa) ----------
 
     // Puts the boat into the easternmost water (the last one in this.waters),
-    // right next to its western shore. Its top is level with the land.
-    // You can stand on it (only from above: from below, swimming, you go through it).
-    // It doesn't fall and isn't pushed by the player.
+    // right next to its western shore.
+    // Two parts:
+    // - the deck: an invisible flat rectangle where you stand. Only solid from above:
+    //   from below (swimming up) you go through it, and swimming at the top of the water
+    //   you pass under it, because it's higher than you can step.
+    // - the look: the boat shape, and see-through water in front of the part under the water.
+    //   It's moved along with the deck (see placeBoat).
     makeBoat ()
     {
         const water = this.waters[this.waters.length - 1];
         this.boatWater = water;
 
-        this.boat = this.add.rectangle(water.left, this.floorTop, BOAT_WIDTH, BOAT_HEIGHT, COLOR_BOAT)
-            .setOrigin(0, 0);
+        const deckWidth = BOAT_WIDTH - 2 * BOAT_TIP;
+        const deckTop = this.floorTop - BOAT_ABOVE;
+
+        this.boat = this.add.rectangle(water.left + BOAT_TIP, deckTop, deckWidth, 4)
+            .setOrigin(0, 0).setVisible(false);
         this.physics.add.existing(this.boat);
         const body = this.boat.body;
         body.setAllowGravity(false);
@@ -2696,8 +2745,37 @@ export class TestRoom extends Scene
         body.checkCollision.down = false;
         body.checkCollision.left = false;
         body.checkCollision.right = false;
-
         this.physics.add.collider(this.player, this.boat);
+
+        // The boat shape, drawn once. Its (0, 0) is the deck's left end, at deck height.
+        // Drawn in front of the player (depth 1), so you swim behind it.
+        const hull = this.add.graphics().setDepth(1);
+        const bottomInset = (BOAT_WIDTH - BOAT_BOTTOM_WIDTH) / 2;
+        const depth = BOAT_ABOVE + BOAT_BELOW;
+        hull.fillStyle(COLOR_BOAT);
+        hull.fillPoints([
+            { x: -BOAT_TIP, y: -BOAT_TIP },                                   // left tip
+            { x: 0, y: 0 },                                                   // deck, left end
+            { x: deckWidth, y: 0 },                                           // deck, right end
+            { x: deckWidth + BOAT_TIP, y: -BOAT_TIP },                        // right tip
+            { x: deckWidth + BOAT_TIP - bottomInset, y: depth },              // bottom, right
+            { x: -BOAT_TIP + bottomInset, y: depth }                          // bottom, left
+        ], true);
+
+        // See-through water in front of the part under the water.
+        const waterFront = this.add.rectangle(0, 0, BOAT_WIDTH, BOAT_BELOW, COLOR_WATER_IN_FRONT, WATER_IN_FRONT_ALPHA)
+            .setOrigin(0, 0).setDepth(2);
+
+        this.boatLook = { hull, waterFront };
+        this.placeBoat();
+    }
+
+    // Moves the boat's look to where its deck is.
+    placeBoat ()
+    {
+        const left = this.boat.x; // the deck's left end
+        this.boatLook.hull.setPosition(left, this.boat.y);
+        this.boatLook.waterFront.setPosition(left - BOAT_TIP, this.floorTop);
     }
 
     // Is the player standing on the boat? (Feet on its top, middle of the player above it.)
@@ -2715,11 +2793,12 @@ export class TestRoom extends Scene
     {
         const boat = this.boat.body;
         let speed = 0;
-        if (this.cursors.left.isDown && boat.left > this.boatWater.left)
+        // (The raised ends stick out BOAT_TIP past the deck; they stay inside the water too.)
+        if (this.cursors.left.isDown && boat.left - BOAT_TIP > this.boatWater.left)
         {
             speed = -BOAT_SPEED;
         }
-        else if (this.cursors.right.isDown && boat.right < this.boatWater.right)
+        else if (this.cursors.right.isDown && boat.right + BOAT_TIP < this.boatWater.right)
         {
             speed = BOAT_SPEED;
         }
@@ -2731,7 +2810,8 @@ export class TestRoom extends Scene
     // swinging back and forth: the steering animation.
     makePaddle ()
     {
-        const paddle = this.add.rectangle(0, 0, 2, PADDLE_LENGTH, COLOR_PADDLE).setOrigin(0.5, 0);
+        // (In front of the boat and the water in front of it, depth 3.)
+        const paddle = this.add.rectangle(0, 0, 2, PADDLE_LENGTH, COLOR_PADDLE).setOrigin(0.5, 0).setDepth(3);
         paddle.setAngle(-PADDLE_SWING);
         this.tweens.add({
             targets: paddle,
@@ -2908,7 +2988,8 @@ export class TestRoom extends Scene
             return;
         }
 
-        if (this.failWobble && this.failWobble.isPlaying())
+        // The wobble or sleeping (Cochi) interrupts swimming: you don't float meanwhile.
+        if ((this.failWobble && this.failWobble.isPlaying()) || this.sleep)
         {
             if (this.swimming)
             {
