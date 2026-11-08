@@ -158,13 +158,20 @@ const COLOR_BACKREST = 0xb89b5e;
 // Every time you walk into the Marketplace, each merchant gets 0 to MAX_OBJECTS_EACH
 // of every object type (picked at random), lying on the ground next to their mat.
 // They don't move. Leaving the Marketplace takes them away.
-// For now these are demo objects (A, B, C) in different colors, each marked with its letter.
-// Their names are in src/data/market-objects.json under the same id.
+// The objects are cooking pots, baskets and gourds, each drawn as a simple shape
+// (see drawMarketObject). Their names are in src/data/market-objects.json under the same id.
 const MARKET_OBJECTS = [
-    { id: 'objectA', color: 0xe76f51, letter: 'a' },
-    { id: 'objectB', color: 0x4cc9f0, letter: 'b' },
-    { id: 'objectC', color: 0xf8f9fa, letter: 'c' }
+    { id: 'comitl', shape: 'pot' },
+    { id: 'chiquihuitl', shape: 'basket' },
+    { id: 'ayohtli', shape: 'gourd' }
 ];
+// Colors of the shapes.
+const COLOR_POT = 0xa0522d;          // clay
+const COLOR_POT_RIM = 0x6e3518;      // darker clay for the rim
+const COLOR_BASKET = 0xd2b06a;       // reed
+const COLOR_BASKET_WEAVE = 0x8a6a35; // darker lines of the weave and the rim
+const COLOR_GOURD = 0xd9a441;        // yellow-orange
+const COLOR_GOURD_STEM = 0x5a6b2a;   // green-brown
 const MAX_OBJECTS_EACH = 4;
 const OBJECT_SIZE = 10;  // each object is a square, in pixels
 const OBJECT_GAP = 1;    // space between two objects lying next to / on top of each other
@@ -572,7 +579,7 @@ export class TestRoom extends Scene
         // The leader's counting task (all of this starts over when you leave the Marketplace):
         // marketQuest  = the task while it's running: { id, total }
         //                (which object to count, and how many there are). null when there is none.
-        // marketDone   = the object types already counted right, e.g. [ 'objectB' ].
+        // marketDone   = the object types already counted right, e.g. [ 'chiquihuitl' ].
         // marketWrong  = how many wrong answers so far.
         // leaderAngry  = true after COUNTING_MAX_WRONG wrong answers: he shoos you away.
         this.resetMarketTask();
@@ -2145,7 +2152,7 @@ export class TestRoom extends Scene
     {
         // (The merchants are everyone who sells something, the bean counter too.)
         this.npcs.filter((npc) => npcText[npc.type].sells).forEach((npc) => {
-            // Which objects this merchant gets, e.g. [ A, A, B, C, C, C ], then shuffled.
+            // Which objects this merchant gets, e.g. [ pot, pot, basket, gourd, gourd, gourd ], then shuffled.
             const objects = [];
             MARKET_OBJECTS.forEach((type) => {
                 const amount = randomBetween(0, MAX_OBJECTS_EACH);
@@ -2176,23 +2183,51 @@ export class TestRoom extends Scene
             objects.forEach((type, i) => {
                 const place = places[i];
                 const y = ground - OBJECT_SIZE / 2 - place.row * pitch;
-                const box = this.add.rectangle(x + place.x, y, OBJECT_SIZE, OBJECT_SIZE, type.color)
-                    .setDepth(-1);
-                const letter = this.add.text(x + place.x, y, type.letter,
-                    { fontFamily: 'Arial', fontSize: 8, color: '#000000' })
-                    .setOrigin(0.5).setDepth(-1);
-                this.marketObjects.push({ box, letter, id: type.id });
+                const drawing = this.add.graphics({ x: x + place.x, y }).setDepth(-1);
+                this.drawMarketObject(drawing, type.shape);
+                this.marketObjects.push({ drawing, id: type.id });
             });
         });
+    }
+
+    // Draws one counting object. The middle of its place is at 0, 0;
+    // it fits in an OBJECT_SIZE square (10 x 10 pixels: -5 to 5), and its bottom (y = 5) sits on the ground.
+    drawMarketObject (g, shape)
+    {
+        if (shape === 'pot')
+        {
+            // A round clay body with a short, darker rim on top.
+            g.fillStyle(COLOR_POT);
+            g.fillCircle(0, 1, 4);
+            g.fillStyle(COLOR_POT_RIM);
+            g.fillRect(-3, -4, 6, 2.5);
+        }
+        else if (shape === 'basket')
+        {
+            // Wider at the top than at the bottom, with a rim and lines of weave across it.
+            g.fillStyle(COLOR_BASKET);
+            g.fillPoints([ { x: -5, y: -3 }, { x: 5, y: -3 }, { x: 3.5, y: 5 }, { x: -3.5, y: 5 } ], true);
+            g.fillStyle(COLOR_BASKET_WEAVE);
+            g.fillRect(-5, -4, 10, 1.5);
+            g.lineStyle(1, COLOR_BASKET_WEAVE);
+            g.lineBetween(-4.5, -0.5, 4.5, -0.5);
+            g.lineBetween(-4, 2, 4, 2);
+        }
+        else if (shape === 'gourd')
+        {
+            // A big round bottom, a smaller round top, and a little stem.
+            g.fillStyle(COLOR_GOURD);
+            g.fillCircle(0, 2, 3);
+            g.fillCircle(0, -2, 2);
+            g.fillStyle(COLOR_GOURD_STEM);
+            g.fillRect(-0.5, -5, 1, 1.5);
+        }
     }
 
     // Takes all counting objects away.
     removeMarketObjects ()
     {
-        this.marketObjects.forEach((object) => {
-            object.box.destroy();
-            object.letter.destroy();
-        });
+        this.marketObjects.forEach((object) => object.drawing.destroy());
         this.marketObjects = [];
     }
 

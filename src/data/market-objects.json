@@ -1,5 +1,5 @@
 {
-    "objectA": { "name": { "nah": "Object A", "en": "Object A" }, "plural": { "nah": "Objects A", "en": "Objects A" } },
-    "objectB": { "name": { "nah": "Object B", "en": "Object B" }, "plural": { "nah": "Objects B", "en": "Objects B" } },
-    "objectC": { "name": { "nah": "Object C", "en": "Object C" }, "plural": { "nah": "Objects C", "en": "Objects C" } }
+    "comitl": { "name": { "nah": "Comitl", "en": "Cooking pot" }, "plural": { "nah": "Comitl", "en": "Cooking pots" } },
+    "chiquihuitl": { "name": { "nah": "Chiquihuitl", "en": "Basket" }, "plural": { "nah": "Chiquihuitl", "en": "Baskets" } },
+    "ayohtli": { "name": { "nah": "Ayohtli", "en": "Gourd" }, "plural": { "nah": "Ayohtli", "en": "Gourds" } }
 }
