@@ -57,7 +57,7 @@
         "howMany": { "words": [
             { "nah": "Quezqui", "en": "How many" },
             { "slot": "item", "end": "" },
-            { "nah": "are there?", "en": "are there?" }
+            { "nah": "onoc?", "en": "are there?" }
         ] },
         "paid": { "nah": "(demo) Well done! Here is your cacao.", "en": "Well done! Here is your cacao." },
         "requestAgain": { "nah": "(demo) Will you count something else for me?", "en": "Will you count something else for me?" },
