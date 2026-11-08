@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
 import plantText from '../../data/plants.json';
+import lakeText from '../../data/lake.json';
 import homeText from '../../data/home.json';
 import doorText from '../../data/doors.json';
 import marketObjectText from '../../data/market-objects.json';
@@ -33,15 +34,31 @@ function buildRoomGrid ()
     return grid;
 }
 
-// Same as a normal room, but the right half of the floor is water.
+// --- Lake of Colors ---
+// Twice as wide as the screen (64 tiles), in four parts of 16 tiles each,
+// from left to right: land, water, land, water.
+const LAKE_WIDTH = ROOM_WIDTH * 2;
+const LAKE_PART = LAKE_WIDTH / 4; // 16 tiles
+
 function buildWaterRoomGrid ()
 {
-    const grid = buildRoomGrid();
+    const grid = [];
+    for (let row = 0; row < ROOM_HEIGHT; row++)
+    {
+        const isFloor = row >= ROOM_HEIGHT - FLOOR_ROWS;
+        grid.push(new Array(LAKE_WIDTH).fill(isFloor ? FLOOR : EMPTY));
+    }
+
+    // The 2nd and 4th part of the floor are water.
     for (let row = ROOM_HEIGHT - FLOOR_ROWS; row < ROOM_HEIGHT; row++)
     {
-        for (let col = ROOM_WIDTH / 2; col < ROOM_WIDTH; col++)
+        for (let col = 0; col < LAKE_WIDTH; col++)
         {
-            grid[row][col] = WATER;
+            const part = Math.floor(col / LAKE_PART); // 0, 1, 2 or 3
+            if (part === 1 || part === 3)
+            {
+                grid[row][col] = WATER;
+            }
         }
     }
     return grid;
@@ -264,7 +281,7 @@ const LAKE_PLANTS = [
     },
     {
         // A tall, narrow tree
-        col: 12, type: 'yellowFlower', color: 0xf2c418,
+        col: 13, type: 'yellowFlower', color: 0xf2c418,
         trunk: { width: 4, height: 16 },
         crown: { width: 26, height: 68 },
         flowers: [ { x: -6, y: -27 }, { x: 6, y: -19 }, { x: -7, y: -9 }, { x: 5, y: 0 },
@@ -273,6 +290,12 @@ const LAKE_PLANTS = [
 ];
 const COLOR_LEAVES = 0x2d6a4f;
 const FLOWER_SIZE = 6;
+
+// The black rock between the bush and the tall tree (to look at with Itta; you walk past it).
+// col = the tile column of its middle, counted from the Lake's left edge.
+// Its Itta text is in src/data/lake.json under "rock".
+const LAKE_ROCK = { col: 10, width: 20, height: 12 };
+const COLOR_ROCK = 0x111111;
 
 // --- Talking (Ihtoa) ---
 // How long the speech animation lasts, in milliseconds.
@@ -316,7 +339,7 @@ function buildInsideGrid ()
 const ROOMS = [
     buildMarketplaceGrid(), // 0 = Marketplace
     buildRoomGrid(),     // 1 = Home (where the game starts)
-    buildWaterRoomGrid(), // 2 = Lake of Colors: right half is water
+    buildWaterRoomGrid(), // 2 = Lake of Colors: land, water, land, water
     buildInsideGrid()    // 3 = Inside (behind the door of the house in Home)
 ];
 const FIRST_SEPARATE_ROOM = 3;
@@ -558,6 +581,34 @@ function joinRoomsSideBySide (rooms)
     return grid;
 }
 
+// Finds every water on the map: each stretch of water tiles next to each other
+// (looking at the bottom row of tiles). Returns a list of { left, right } in pixels,
+// from left to right.
+function findWaters (grid)
+{
+    const bottomRow = grid[ROOM_HEIGHT - 1];
+    const waters = [];
+    let col = 0;
+    while (col < bottomRow.length)
+    {
+        if (bottomRow[col] === WATER)
+        {
+            // A water starts here: go on until the land starts again.
+            const start = col;
+            while (col < bottomRow.length && bottomRow[col] === WATER)
+            {
+                col++;
+            }
+            waters.push({ left: start * TILE, right: col * TILE });
+        }
+        else
+        {
+            col++;
+        }
+    }
+    return waters;
+}
+
 export class TestRoom extends Scene
 {
     constructor ()
@@ -674,22 +725,21 @@ export class TestRoom extends Scene
         // How the last catch went: { colorName, success }, or null before the first one.
         this.lastCatch = null;
 
-        // Where the player comes back after falling into the water:
-        // standing on the floor, right next to the water's edge.
-        const waterStartColumn = grid[ROOM_HEIGHT - 1].indexOf(WATER);
-        this.respawnX = waterStartColumn * TILE - 8;
+        // --- All the waters on the map ---
+        // Each water is one stretch of water tiles next to each other: { left, right } in pixels.
+        // (The Lake of Colors has two.) Used for fishing in any water, and for knowing
+        // where to come back after falling in.
+        this.waters = findWaters(grid);
+
+        // Where the player comes back after falling into a water: standing on the floor,
+        // right next to that water's left edge (see fellIntoWater). This is the height.
         this.respawnY = floorTop - 12;
 
         // --- Fish in the water ---
         // The area the fish can swim in. They stay a little away from the edges.
-        const waterLeft = waterStartColumn * TILE;
-        const waterTiles = grid[ROOM_HEIGHT - 1].filter((tile) => tile === WATER).length;
-        this.fishArea = {
-            left: waterLeft + 6,
-            right: waterLeft + waterTiles * TILE - 6,
-            top: floorTop + 5,
-            bottom: floorTop + FLOOR_ROWS * TILE - 5
-        };
+        // Only the first water (the one next to the flowers) has fish for now.
+        const waterLeft = this.waters[0].left;
+        this.fishArea = this.swimArea(this.waters[0]);
 
         // Which room the water is in (its number in the ROOMS list, so 2 = Lake of Colors).
         this.waterRoom = roomAt(waterLeft);
@@ -880,9 +930,10 @@ export class TestRoom extends Scene
                 return;
             }
 
-            if (this.isFacingWater())
+            const water = this.isFacingWater();
+            if (water)
             {
-                this.throwLine();
+                this.throwLine(water);
             }
             else
             {
@@ -1187,6 +1238,13 @@ export class TestRoom extends Scene
             // For Itta: where the plant stands, and how wide it is (the crown's width).
             return { x, width: plant.crown.width, bottom: ground, type: plant.type };
         });
+
+        // The black rock: a black rectangle lying on the ground, drawn behind the player.
+        const rockX = left + LAKE_ROCK.col * TILE + TILE / 2; // middle of the rock
+        this.add.rectangle(rockX, ground - LAKE_ROCK.height / 2, LAKE_ROCK.width, LAKE_ROCK.height, COLOR_ROCK)
+            .setDepth(-1);
+        // For Itta: where the rock is and how wide it is.
+        this.things.push({ x: rockX, width: LAKE_ROCK.width, bottom: ground, text: lakeText.rock.inspect });
     }
 
     // Draws the Marketplace: the leader's shelter (wall, roof, post) on the plateau,
@@ -1932,7 +1990,26 @@ export class TestRoom extends Scene
         bubble.setPosition(speaker.x + side * 4, speaker.y - speaker.height / 2 - 5);
     }
 
+    // The water at this spot (x, in pixels), or null if there's no water there.
+    waterAt (x)
+    {
+        return this.waters.find((water) => x >= water.left && x < water.right) ?? null;
+    }
+
+    // The area inside a water where fish can swim and the float can drift:
+    // a little away from its edges.
+    swimArea (water)
+    {
+        return {
+            left: water.left + 6,
+            right: water.right - 6,
+            top: this.floorTop + 5,
+            bottom: this.floorTop + FLOOR_ROWS * TILE - 5
+        };
+    }
+
     // Is there water in front of the player, at most FISHING_REACH tiles away?
+    // Returns that water (see findWaters), or null if there's none.
     isFacingWater ()
     {
         const body = this.player.body;
@@ -1946,15 +2023,16 @@ export class TestRoom extends Scene
 
             if (tile !== null && tile.index === WATER)
             {
-                return true;
+                return this.waterAt(x);
             }
         }
-        return false;
+        return null;
     }
 
     // Throws out the fishing line: a small float flies from the player onto the water,
     // and a thin line connects the two.
-    throwLine ()
+    // water = the water in front of the player (see isFacingWater).
+    throwLine (water)
     {
         const start = this.rodTip();
 
@@ -1962,6 +2040,7 @@ export class TestRoom extends Scene
         const float = this.add.rectangle(start.x, start.y, 4, 4, 0xffffff);
 
         this.fishing = {
+            water: water,      // the water the line is in
             float: float,
             line: this.add.graphics(),
             landed: false,     // true once the float is on the water
@@ -1993,10 +2072,11 @@ export class TestRoom extends Scene
 
     // Looks for a fish under the float. If there is one, it bites
     // and the q/w/e minigame starts.
-    // Keeps a position inside the water (where the fish can swim).
+    // Keeps a position inside the water the line is in (not too close to its edges).
     clampToWater (x)
     {
-        return Math.min(Math.max(x, this.fishArea.left), this.fishArea.right);
+        const area = this.swimArea(this.fishing.water);
+        return Math.min(Math.max(x, area.left), area.right);
     }
 
     // Called every frame while the float is on the water and nothing has bitten yet:
@@ -2041,14 +2121,17 @@ export class TestRoom extends Scene
         const floatY = this.floorTop;
         const distanceTo = (fish) => Math.hypot(fish.body.x - floatX, fish.body.y - floatY);
 
+        // Only fish in the same water as the float can come to it.
         // The closest fish first, then keep only the first few.
-        const nearest = [...this.fishes]
+        const water = this.fishing.water;
+        const nearest = this.fishes
+            .filter((fish) => this.waterAt(fish.body.x) === water)
             .sort((a, b) => distanceTo(a) - distanceTo(b))
             .slice(0, NEAREST_FISH);
 
         if (nearest.length === 0)
         {
-            return null; // no fish left in the water
+            return null; // no fish in this water
         }
 
         // A "weighted" random pick: imagine each fish gets a slice of a wheel,
@@ -2374,7 +2457,7 @@ export class TestRoom extends Scene
     }
 
     // The player fell into the water: one life point is lost.
-    // With life left, the player comes back at the water's edge, like before.
+    // With life left, the player comes back next to the left edge of the water they fell into.
     // Without life left, the player blacks out (see blackOut).
     fellIntoWater ()
     {
@@ -2382,7 +2465,9 @@ export class TestRoom extends Scene
 
         if (this.life > 0)
         {
-            this.player.body.reset(this.respawnX, this.respawnY);
+            // Which water: the one under the player. (Just in case there's none, the first one.)
+            const water = this.waterAt(this.player.x) ?? this.waters[0];
+            this.player.body.reset(water.left - 8, this.respawnY);
             this.scene.get('Overlay').showLife(this.life);
         }
         else
