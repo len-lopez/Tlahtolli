@@ -283,7 +283,7 @@ const SPEECH_WIDTH = 6;
 const SPEECH_HEIGHT = 4;
 const SPEECH_BLINK = 150; // milliseconds per blink (on or off)
 
-// --- Inside (placeholder name) ---
+// --- Inside (Calihtic in the Map) ---
 // A small room behind the door of the house in Home: smaller than the screen.
 // 20 tiles wide (the screen is 32) and 12 tiles high (the screen is 18):
 // 10 tiles of room above 2 tiles of floor, in the middle of the screen from top to bottom.
