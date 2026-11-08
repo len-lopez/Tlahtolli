@@ -3,6 +3,7 @@ import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
 import plantText from '../../data/plants.json';
 import homeText from '../../data/home.json';
+import doorText from '../../data/doors.json';
 import marketObjectText from '../../data/market-objects.json';
 import numberWords from '../../data/numbers.json';
 import { createProgress, recordAnswer } from '../progress.js';
@@ -599,7 +600,8 @@ export class TestRoom extends Scene
         this.grid = grid;
 
         // Things you can look at with Itta that aren't plants or NPCs
-        // (the trees in Home, the things in Calihtic): { x, width, bottom, text }.
+        // (the house and trees in Home, the things in Calihtic, the doors): { x, width, bottom, text }.
+        // When two of them are in front of the player, the one earlier in this list wins.
         this.things = [];
 
         // While going through a door (the black circle animation): true.
@@ -938,13 +940,23 @@ export class TestRoom extends Scene
     // Draws every door from the DOORS list: a brown rectangle standing on the ground,
     // behind the player. Each door is remembered in this.doors as
     // [ side, side ], where a side is { room, rect } (rect = the door rectangle).
+    // Each door is also added to this.things for Itta: a door that leads further indoors
+    // is an entrance, one that leads further outdoors is an exit (src/data/doors.json).
     makeDoors ()
     {
-        this.doors = DOORS.map((pair) => pair.map((side) => {
+        this.doors = DOORS.map((pair) => pair.map((side, i) => {
             const x = roomLeft(side.room) + side.col * TILE; // middle of the door
-            const rect = this.add.rectangle(x - DOOR_WIDTH / 2, this.groundTopAt(x) - DOOR_HEIGHT,
+            const ground = this.groundTopAt(x);
+            const rect = this.add.rectangle(x - DOOR_WIDTH / 2, ground - DOOR_HEIGHT,
                 DOOR_WIDTH, DOOR_HEIGHT, COLOR_DOOR)
                 .setOrigin(0, 0).setDepth(-1);
+
+            const otherRoom = pair[1 - i].room;
+            const leadsIn = ROOM_INDOORS[otherRoom] > ROOM_INDOORS[side.room];
+            const text = leadsIn ? doorText.entrance.inspect : doorText.exit.inspect;
+            // Put at the front of the list: in front of the house door, the door wins over the house.
+            this.things.unshift({ x, width: DOOR_WIDTH, bottom: ground, text });
+
             return { room: side.room, rect };
         }));
     }
@@ -1122,6 +1134,10 @@ export class TestRoom extends Scene
             .setOrigin(0, 0).setDepth(-1);
 
         // (The door is drawn with all the other doors; see DOORS and makeDoors.)
+
+        // For Itta: the whole width of the walls, standing on the ground.
+        this.things.push({ x: houseLeft + houseWidth / 2, width: houseWidth, bottom: ground,
+            text: homeText.house.inspect });
 
         // Trees: a brown trunk with a green square on top.
         HOME_TREES.forEach((col) => {

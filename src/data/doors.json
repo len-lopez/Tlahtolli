@@ -1,0 +1,8 @@
+{
+    "entrance": {
+        "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "calacohuayan.", "en": "entrance." } ] }
+    },
+    "exit": {
+        "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "quizayan.", "en": "exit." } ] }
+    }
+}
