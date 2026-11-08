@@ -1203,8 +1203,8 @@ export class TestRoom extends Scene
         overlay.openDialogue({ nah: digit + entry.word, en: digit + entry.meaning }, next, true);
     }
 
-    // The cloth buyer says he wants to buy cloth, then asks: if you ask around the other
-    // merchants and find him the best price, he'll pay you a commission. Will you?
+    // The cloth buyer says he wants to buy cloth, then: if you ask around the other
+    // merchants and find him the best price, he'll pay you a commission. Then he asks: will you?
     // Yes: the task starts (see startClothQuest). No: the box just closes.
     // While the task is running, he first asks if you found a good price yet; if you say yes,
     // he asks which one is the lowest price you found, and you enter it (see reportLowestPrice).
@@ -1228,8 +1228,11 @@ export class TestRoom extends Scene
             return;
         }
 
+        // Three boxes one after the other: what he wants, his offer, then the yes/no question.
         overlay.openDialogue(text.line, () => {
-            overlay.openQuestion(text.request, () => this.startClothQuest(), () => {});
+            overlay.openDialogue(text.request, () => {
+                overlay.openQuestion(text.willYou, () => this.startClothQuest(), () => {});
+            });
         });
     }
 
