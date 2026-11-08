@@ -35,7 +35,12 @@
             { "nah": "nimitztlaxtlahuiz.", "en": "I will pay you." }
         ] },
         "order": { "words": [
-            { "nah": "(demo) Go down to the market and count all the", "en": "Go down to the market and count all the" },
+            { "nah": "Xitemo", "en": "Go down" },
+            { "nah": "tianquizco", "en": "to the market" },
+            { "nah": "ihuan", "en": "and" },
+            { "nah": "xicpohua", "en": "count" },
+            { "nah": "in", "en": null },
+            { "nah": "ixquich", "en": "all the" },
             { "slot": "item", "end": "." },
             { "nah": "Then come back and report to me.", "en": "Then come back and report to me." }
         ] },
