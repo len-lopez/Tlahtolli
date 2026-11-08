@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
 import plantText from '../../data/plants.json';
+import homeText from '../../data/home.json';
 import marketObjectText from '../../data/market-objects.json';
 import numberWords from '../../data/numbers.json';
 import { createProgress, recordAnswer } from '../progress.js';
@@ -359,6 +360,26 @@ const ROOM_CEILING = [
 const DOOR_WIDTH = 20;
 const DOOR_HEIGHT = 36;
 
+// The things standing on the floor of Inside (Calihtic), for Itta.
+// id    = where its Itta text is in src/data/home.json
+// shape = which drawing to use: the same ones as the Marketplace objects (see drawMarketObject)
+// x     = where its middle is, in pixels from Inside's left edge
+//         (the room is 320 pixels wide; the door is in the middle, at 160).
+// The cooking pot and the pumpkin stand together on the left, the basket on the right.
+const INSIDE_THINGS = [
+    { id: 'comitl', shape: 'pot', x: 40 },
+    { id: 'ayohtli', shape: 'gourd', x: 58 },
+    { id: 'chiquihuitl', shape: 'basket', x: 270 }
+];
+// The Marketplace drawings are 10 x 10 pixels; at home they're drawn bigger (16 x 16).
+const INSIDE_THING_SCALE = 1.6;
+
+// --- Going through a door (Calaqui / Quiza) ---
+// The screen goes black in a shrinking circle around the player,
+// then opens again in a growing circle in the new room. In milliseconds:
+const DOOR_CLOSE_TIME = 200;
+const DOOR_OPEN_TIME = 200;
+
 // The room where a new game starts, and where you wake up after blacking out:
 // Home.
 const START_ROOM = 1;
@@ -577,6 +598,14 @@ export class TestRoom extends Scene
         // Remembered, to look up where the ground is (see groundTopAt).
         this.grid = grid;
 
+        // Things you can look at with Itta that aren't plants or NPCs
+        // (the trees in Home, the things in Calihtic): { x, width, bottom, text }.
+        this.things = [];
+
+        // While going through a door (the black circle animation): true.
+        // Walking and powers don't work then.
+        this.transitioning = false;
+
         // --- Home: house and trees ---
         this.decorateHome();
 
@@ -791,8 +820,9 @@ export class TestRoom extends Scene
     // The action name comes from the word list (src/data/wordlist.json).
     doAction (action)
     {
-        // While sleeping or during the speech animation, no power works.
-        if (this.sleep || this.talking)
+        // While sleeping, during the speech animation, or while going through a door,
+        // no power works.
+        if (this.sleep || this.talking || this.transitioning)
         {
             return;
         }
@@ -891,6 +921,18 @@ export class TestRoom extends Scene
         const top = INSIDE_TOP_ROW * TILE;
         this.add.rectangle(left, top, width, ground - top, COLOR_INSIDE)
             .setOrigin(0, 0).setDepth(-1);
+
+        // The things on the floor (INSIDE_THINGS), standing on the ground, behind the player.
+        // Drawn like the Marketplace objects, only bigger. Remembered in this.things for Itta.
+        const size = OBJECT_SIZE * INSIDE_THING_SCALE;
+        INSIDE_THINGS.forEach((thing) => {
+            const x = left + thing.x;
+            const drawing = this.add.graphics({ x, y: ground - size / 2 }).setDepth(-1);
+            drawing.setScale(INSIDE_THING_SCALE);
+            this.drawMarketObject(drawing, thing.shape);
+
+            this.things.push({ x, width: size, bottom: ground, text: homeText[thing.id].inspect });
+        });
     }
 
     // Draws every door from the DOORS list: a brown rectangle standing on the ground,
@@ -975,12 +1017,89 @@ export class TestRoom extends Scene
             && this.player.body.bottom > door.y;
     }
 
-    // Puts the player in front of another door, standing on the ground.
-    // The camera follows by itself in the next frame (see update).
+    // Takes the player through to another door: the screen closes in a black circle,
+    // the player is put in front of that door (standing on the ground),
+    // and the screen opens again in a circle. The camera follows by itself (see update).
     goThroughDoor (door)
     {
-        const x = door.x + door.width / 2;
-        this.player.body.reset(x, this.groundTopAt(x) - 12); // 12 = half the player's height
+        this.transitioning = true;
+        this.player.body.setVelocity(0, 0);
+
+        // A drawing on top of everything that doesn't move with the camera.
+        const curtain = this.add.graphics().setScrollFactor(0).setDepth(1000);
+
+        // How far the circle is open: 1 = the whole screen, 0 = all black.
+        const circle = { open: 1 };
+
+        this.tweens.add({
+            targets: circle,
+            open: 0,
+            duration: DOOR_CLOSE_TIME,
+            ease: 'Sine.easeIn',
+            onUpdate: () => this.drawCurtain(curtain, circle.open),
+            onComplete: () => {
+                const x = door.x + door.width / 2;
+                this.player.body.reset(x, this.groundTopAt(x) - 12); // 12 = half the player's height
+
+                this.tweens.add({
+                    targets: circle,
+                    open: 1,
+                    duration: DOOR_OPEN_TIME,
+                    ease: 'Sine.easeOut',
+                    onUpdate: () => this.drawCurtain(curtain, circle.open),
+                    onComplete: () => {
+                        curtain.destroy();
+                        this.transitioning = false;
+                    }
+                });
+            }
+        });
+    }
+
+    // Draws the black around a round hole in the middle of which the player stands.
+    // open = how big the hole is: 1 = it reaches the farthest corner of the screen
+    // (nothing black is seen), 0 = no hole (all black).
+    // The black is made of 4 rectangles around the hole's square,
+    // and 4 corner pieces that fill the square around the round edge.
+    drawCurtain (g, open)
+    {
+        const width = this.scale.width;
+        const height = this.scale.height;
+        const camera = this.cameras.main;
+
+        // Where the player is on the screen: the middle of the hole.
+        const cx = this.player.x - camera.scrollX;
+        const cy = this.player.y - camera.scrollY;
+        const farthest = Math.hypot(Math.max(cx, width - cx), Math.max(cy, height - cy));
+        const r = open * farthest;
+
+        g.clear();
+        g.fillStyle(0x000000, 1);
+
+        if (r < 1)
+        {
+            g.fillRect(0, 0, width, height);
+            return;
+        }
+
+        // Above, below, left and right of the hole's square.
+        g.fillRect(0, 0, width, Math.max(0, cy - r));
+        g.fillRect(0, cy + r, width, Math.max(0, height - (cy + r)));
+        g.fillRect(0, cy - r, Math.max(0, cx - r), 2 * r);
+        g.fillRect(cx + r, cy - r, Math.max(0, width - (cx + r)), 2 * r);
+
+        // The 4 corners of the square, outside the round edge.
+        // Each piece: the square's corner, then points along a quarter of the circle.
+        const steps = 12;
+        [ [ 1, 1 ], [ -1, 1 ], [ -1, -1 ], [ 1, -1 ] ].forEach(([ sx, sy ], quarter) => {
+            const points = [ { x: cx + sx * r, y: cy + sy * r } ];
+            for (let i = 0; i <= steps; i++)
+            {
+                const angle = (quarter + i / steps) * Math.PI / 2;
+                points.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
+            }
+            g.fillPoints(points, true);
+        });
     }
 
     // Draws the placeholder house and trees in Home, all made of rectangles.
@@ -1012,6 +1131,9 @@ export class TestRoom extends Scene
                 .setDepth(-1);
             this.add.rectangle(x, ground - TRUNK_HEIGHT - CROWN_SIZE / 2 + 4, CROWN_SIZE, CROWN_SIZE, COLOR_CROWN)
                 .setDepth(-1);
+
+            // For Itta: as wide as the crown, standing on the ground.
+            this.things.push({ x, width: CROWN_SIZE, bottom: ground, text: homeText.tree.inspect });
         });
     }
 
@@ -1710,6 +1832,8 @@ export class TestRoom extends Scene
         const npc = this.npcInFront();
         // (You walk through plants, so a plant you're standing in counts too.)
         const plant = this.plants.find((p) => this.isInFront(p.x, p.width, p.bottom, true));
+        // (The same for the trees in Home and the things in Calihtic.)
+        const thing = this.things.find((t) => this.isInFront(t.x, t.width, t.bottom, true));
 
         let text = menuText.messages.nothingToInspect;
         if (npc)
@@ -1719,6 +1843,10 @@ export class TestRoom extends Scene
         else if (plant)
         {
             text = plantText[plant.type].inspect;
+        }
+        else if (thing)
+        {
+            text = thing.text;
         }
 
         this.scene.get('Overlay').openDialogue(text);
@@ -2529,9 +2657,9 @@ export class TestRoom extends Scene
             this.fellIntoWater();
         }
 
-        if (this.sleep)
+        if (this.sleep || this.transitioning)
         {
-            // While sleeping you can't walk.
+            // While sleeping, or going through a door, you can't walk.
             this.player.body.setVelocityX(0);
         }
         else if (this.fishing)
