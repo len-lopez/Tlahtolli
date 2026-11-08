@@ -33,15 +33,31 @@ function buildRoomGrid ()
     return grid;
 }
 
-// Same as a normal room, but the right half of the floor is water.
+// --- Lake of Colors ---
+// Twice as wide as the screen (64 tiles), in four parts of 16 tiles each,
+// from left to right: land, water, land, water.
+const LAKE_WIDTH = ROOM_WIDTH * 2;
+const LAKE_PART = LAKE_WIDTH / 4; // 16 tiles
+
 function buildWaterRoomGrid ()
 {
-    const grid = buildRoomGrid();
+    const grid = [];
+    for (let row = 0; row < ROOM_HEIGHT; row++)
+    {
+        const isFloor = row >= ROOM_HEIGHT - FLOOR_ROWS;
+        grid.push(new Array(LAKE_WIDTH).fill(isFloor ? FLOOR : EMPTY));
+    }
+
+    // The 2nd and 4th part of the floor are water.
     for (let row = ROOM_HEIGHT - FLOOR_ROWS; row < ROOM_HEIGHT; row++)
     {
-        for (let col = ROOM_WIDTH / 2; col < ROOM_WIDTH; col++)
+        for (let col = 0; col < LAKE_WIDTH; col++)
         {
-            grid[row][col] = WATER;
+            const part = Math.floor(col / LAKE_PART); // 0, 1, 2 or 3
+            if (part === 1 || part === 3)
+            {
+                grid[row][col] = WATER;
+            }
         }
     }
     return grid;
@@ -316,7 +332,7 @@ function buildInsideGrid ()
 const ROOMS = [
     buildMarketplaceGrid(), // 0 = Marketplace
     buildRoomGrid(),     // 1 = Home (where the game starts)
-    buildWaterRoomGrid(), // 2 = Lake of Colors: right half is water
+    buildWaterRoomGrid(), // 2 = Lake of Colors: land, water, land, water
     buildInsideGrid()    // 3 = Inside (behind the door of the house in Home)
 ];
 const FIRST_SEPARATE_ROOM = 3;
@@ -682,8 +698,14 @@ export class TestRoom extends Scene
 
         // --- Fish in the water ---
         // The area the fish can swim in. They stay a little away from the edges.
+        // Only the first water (the one next to the flowers) has fish:
+        // count the water tiles from its left edge until the land starts again.
         const waterLeft = waterStartColumn * TILE;
-        const waterTiles = grid[ROOM_HEIGHT - 1].filter((tile) => tile === WATER).length;
+        let waterTiles = 0;
+        while (grid[ROOM_HEIGHT - 1][waterStartColumn + waterTiles] === WATER)
+        {
+            waterTiles++;
+        }
         this.fishArea = {
             left: waterLeft + 6,
             right: waterLeft + waterTiles * TILE - 6,
