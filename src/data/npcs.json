@@ -81,7 +81,10 @@
             { "nah": "Occeppa", "en": "One more time" },
             { "nah": "xicpohua.", "en": "count it." }
         ] },
-        "deceive": { "nah": "(demo) Are you trying to deceive me?", "en": "Are you trying to deceive me?" },
-        "goAway": { "nah": "(demo) Go away!", "en": "Go away!" }
+        "deceive": { "words": [
+            { "nah": "Cuix", "en": null },
+            { "nah": "tinechcayahua?", "en": "you deceive me?" }
+        ] },
+        "goAway": { "nah": "Xinechcahua!", "en": "Go away!" }
     }
 }
