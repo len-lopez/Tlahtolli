@@ -55,7 +55,7 @@
             { "nah": "mochi?", "en": "all?" }
         ] },
         "howMany": { "words": [
-            { "nah": "(demo) How many", "en": "How many" },
+            { "nah": "Quezqui", "en": "How many" },
             { "slot": "item", "end": "" },
             { "nah": "are there?", "en": "are there?" }
         ] },
