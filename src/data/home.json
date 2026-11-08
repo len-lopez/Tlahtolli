@@ -1,4 +1,7 @@
 {
+    "house": {
+        "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "calli.", "en": "house." } ] }
+    },
     "tree": {
         "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "cuahuitl.", "en": "tree." } ] }
     },

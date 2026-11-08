@@ -600,7 +600,8 @@ export class TestRoom extends Scene
         this.grid = grid;
 
         // Things you can look at with Itta that aren't plants or NPCs
-        // (the trees in Home, the things in Calihtic): { x, width, bottom, text }.
+        // (the house and trees in Home, the things in Calihtic, the doors): { x, width, bottom, text }.
+        // When two of them are in front of the player, the one earlier in this list wins.
         this.things = [];
 
         // While going through a door (the black circle animation): true.
@@ -953,7 +954,8 @@ export class TestRoom extends Scene
             const otherRoom = pair[1 - i].room;
             const leadsIn = ROOM_INDOORS[otherRoom] > ROOM_INDOORS[side.room];
             const text = leadsIn ? doorText.entrance.inspect : doorText.exit.inspect;
-            this.things.push({ x, width: DOOR_WIDTH, bottom: ground, text });
+            // Put at the front of the list: in front of the house door, the door wins over the house.
+            this.things.unshift({ x, width: DOOR_WIDTH, bottom: ground, text });
 
             return { room: side.room, rect };
         }));
@@ -1132,6 +1134,10 @@ export class TestRoom extends Scene
             .setOrigin(0, 0).setDepth(-1);
 
         // (The door is drawn with all the other doors; see DOORS and makeDoors.)
+
+        // For Itta: the whole width of the walls, standing on the ground.
+        this.things.push({ x: houseLeft + houseWidth / 2, width: houseWidth, bottom: ground,
+            text: homeText.house.inspect });
 
         // Trees: a brown trunk with a green square on top.
         HOME_TREES.forEach((col) => {
