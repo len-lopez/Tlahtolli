@@ -1642,6 +1642,16 @@ export class Overlay extends Scene
                 { ...TEXT_STYLE, fontSize: 9 });
             const partLabel = this.add.text(0, 2, labels[i], TEXT_STYLE).setOrigin(0.5);
 
+            // Clicking (or tapping) the box does the same as pressing its key.
+            // (Only while the minigame is running: not while the boxes stay on screen after a mistake.)
+            box.setInteractive({ useHandCursor: true });
+            box.on('pointerdown', () => {
+                if (this.mode === 'minigame')
+                {
+                    this.handleMinigameKey({ key: letter, repeat: false, shiftKey: false });
+                }
+            });
+
             holder.add([ box, keyLabel, partLabel ]);
             ui.add(holder);
             boxes[letter] = { holder, box, part: labels[i], slot: i, used: false };
