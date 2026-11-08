@@ -32,7 +32,9 @@
             { "nah": "catlehhuatl", "en": "which one" },
             { "nah": "in", "en": null },
             { "nah": "occenca tepiton,", "en": "lowest," },
-            { "nah": "nimitztlaxtlahuiz.", "en": "I will pay you." },
+            { "nah": "nimitztlaxtlahuiz.", "en": "I will pay you." }
+        ] },
+        "willYou": { "words": [
             { "nah": "Cuix", "en": null },
             { "nah": "ticchihuaz?", "en": "you will do it?" }
         ] },
