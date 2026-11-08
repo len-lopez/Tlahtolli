@@ -13,8 +13,8 @@
         { "room": 0, "label": { "nah": "Tianquizco", "en": "Marketplace" } }
     ],
     "save": [
-        { "id": "download", "label": { "nah": "Xiquixti in motlapial", "en": "Download save file" } },
-        { "id": "upload", "label": { "nah": "Xiccalaqui in motlapial", "en": "Upload save file" } }
+        { "id": "download", "label": { "nah": "Xiquixti in motlapial", "en": "Download your save file" } },
+        { "id": "upload", "label": { "nah": "Xiccalaqui in motlapial", "en": "Upload your save file" } }
     ],
     "settings": [
         { "language": "en", "label": { "nah": "English", "en": null } },
@@ -40,10 +40,10 @@
         "sell": { "nah": "Nicnamaca:", "en": "I'm selling:" }
     },
     "messages": {
-        "badFile": { "nah": "Inin ahmo tlapialli.", "en": "This file is not a Tlahtolli save file." },
+        "badFile": { "nah": "Inin ahmo tlapialli.", "en": "This is not a save file." },
         "nothingToInspect": { "words": [ { "nah": "Ahtle", "en": "Nothing" }, { "nah": "nican.", "en": "here." } ] },
-        "notInterested": { "nah": "Ahmo nicnequi.", "en": "Not interested." },
-        "notEnoughCacao": { "nah": "Ahmo ixachi in mocacahuauh.", "en": "Not enough cacao." },
+        "notInterested": { "words": [ { "nah": "Ahmo", "en": "Not" }, { "nah": "nicnequi.", "en": "I want it." } ] },
+        "notEnoughCacao": { "words": [ { "nah": "Ahmo", "en": "Not" }, { "nah": "ixachi", "en": "enough" }, { "nah": "in", "en": null }, { "nah": "mocacahuauh.", "en": "your cacao." } ] },
         "boughtOne": { "words": [ { "nah": "Oticcouh", "en": "You bought" }, { "nah": "ce", "en": "one" }, { "slot": "item", "end": "." } ] },
         "boughtMany": { "words": [ { "nah": "Otiquincouh", "en": "You bought" }, { "slot": "count" }, { "slot": "item", "end": "." } ] },
         "soldOne": { "words": [ { "nah": "Oticnamac", "en": "You sold" }, { "nah": "ce", "en": "one" }, { "slot": "item", "end": "." } ] },
