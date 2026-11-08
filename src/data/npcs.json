@@ -15,7 +15,7 @@
     "clothBuyer": {
         "line": { "words": [
             { "nah": "Nicnequi", "en": "I want it" },
-            { "nah": "niccohuaz", "en": "I buy it" },
+            { "nah": "niccohuaz", "en": "I will buy it" },
             { "nah": "cuachtli.", "en": "cloth." }
         ] },
         "request": { "nah": "(demo) If you ask around the other merchants and find me the best price, I'll pay you a commission. Will you?", "en": "If you ask around the other merchants and find me the best price, I'll pay you a commission. Will you?" },
