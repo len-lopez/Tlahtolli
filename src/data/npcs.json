@@ -59,7 +59,12 @@
             { "slot": "item", "end": "" },
             { "nah": "onoc?", "en": "are there?" }
         ] },
-        "paid": { "nah": "(demo) Well done! Here is your cacao.", "en": "Well done! Here is your cacao." },
+        "paid": { "words": [
+            { "nah": "Cualli!", "en": "Good!" },
+            { "nah": "Izcatqui", "en": "Here is" },
+            { "nah": "in", "en": null },
+            { "nah": "mocacahuauh.", "en": "your cacao." }
+        ] },
         "requestAgain": { "nah": "(demo) Will you count something else for me?", "en": "Will you count something else for me?" },
         "allDone": { "nah": "(demo) Thank you, that is everything.", "en": "Thank you, that is everything." },
         "countAgain": { "nah": "(demo) That's not right. Go and count again.", "en": "That's not right. Go and count again." },
