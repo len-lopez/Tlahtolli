@@ -42,7 +42,10 @@
             { "nah": "in", "en": null },
             { "nah": "ixquich", "en": "all the" },
             { "slot": "item", "end": "." },
-            { "nah": "Then come back and report to me.", "en": "Then come back and report to me." }
+            { "nah": "Zatepan", "en": "Afterwards" },
+            { "nah": "xihualmocuepa", "en": "come back" },
+            { "nah": "ihuan", "en": "and" },
+            { "nah": "xinechilhui.", "en": "tell me." }
         ] },
         "countedAll": { "nah": "(demo) Did you count them all?", "en": "Did you count them all?" },
         "howMany": { "words": [
