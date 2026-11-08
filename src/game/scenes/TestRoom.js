@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
 import plantText from '../../data/plants.json';
+import lakeText from '../../data/lake.json';
 import homeText from '../../data/home.json';
 import doorText from '../../data/doors.json';
 import marketObjectText from '../../data/market-objects.json';
@@ -280,7 +281,7 @@ const LAKE_PLANTS = [
     },
     {
         // A tall, narrow tree
-        col: 12, type: 'yellowFlower', color: 0xf2c418,
+        col: 13, type: 'yellowFlower', color: 0xf2c418,
         trunk: { width: 4, height: 16 },
         crown: { width: 26, height: 68 },
         flowers: [ { x: -6, y: -27 }, { x: 6, y: -19 }, { x: -7, y: -9 }, { x: 5, y: 0 },
@@ -289,6 +290,12 @@ const LAKE_PLANTS = [
 ];
 const COLOR_LEAVES = 0x2d6a4f;
 const FLOWER_SIZE = 6;
+
+// The black rock between the bush and the tall tree (to look at with Itta; you walk past it).
+// col = the tile column of its middle, counted from the Lake's left edge.
+// Its Itta text is in src/data/lake.json under "rock".
+const LAKE_ROCK = { col: 10, width: 20, height: 12 };
+const COLOR_ROCK = 0x111111;
 
 // --- Talking (Ihtoa) ---
 // How long the speech animation lasts, in milliseconds.
@@ -1231,6 +1238,13 @@ export class TestRoom extends Scene
             // For Itta: where the plant stands, and how wide it is (the crown's width).
             return { x, width: plant.crown.width, bottom: ground, type: plant.type };
         });
+
+        // The black rock: a black rectangle lying on the ground, drawn behind the player.
+        const rockX = left + LAKE_ROCK.col * TILE + TILE / 2; // middle of the rock
+        this.add.rectangle(rockX, ground - LAKE_ROCK.height / 2, LAKE_ROCK.width, LAKE_ROCK.height, COLOR_ROCK)
+            .setDepth(-1);
+        // For Itta: where the rock is and how wide it is.
+        this.things.push({ x: rockX, width: LAKE_ROCK.width, bottom: ground, text: lakeText.rock.inspect });
     }
 
     // Draws the Marketplace: the leader's shelter (wall, roof, post) on the plateau,
