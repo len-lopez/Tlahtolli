@@ -75,7 +75,12 @@
             { "nah": "Ye", "en": "Already" },
             { "nah": "ixquich.", "en": "everything." }
         ] },
-        "countAgain": { "nah": "(demo) That's not right. Go and count again.", "en": "That's not right. Go and count again." },
+        "countAgain": { "words": [
+            { "nah": "Ahmo", "en": "Not" },
+            { "nah": "iuhqui.", "en": "so." },
+            { "nah": "Occeppa", "en": "One more time" },
+            { "nah": "xicpohua.", "en": "count it." }
+        ] },
         "deceive": { "nah": "(demo) Are you trying to deceive me?", "en": "Are you trying to deceive me?" },
         "goAway": { "nah": "(demo) Go away!", "en": "Go away!" }
     }
