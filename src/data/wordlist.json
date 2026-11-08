@@ -5,5 +5,7 @@
     { "word": "Ihtoa", "en": "Speak", "action": "talk" },
     { "word": "Itta", "en": "Look", "action": "inspect" },
     { "word": "Cohua", "en": "Buy", "action": "buy" },
-    { "word": "Namaca", "en": "Sell", "action": "sell" }
+    { "word": "Namaca", "en": "Sell", "action": "sell" },
+    { "word": "Calaqui", "en": "Enter", "action": "enter" },
+    { "word": "Quiza", "en": "Leave", "action": "leave" }
 ]

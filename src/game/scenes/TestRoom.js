@@ -734,6 +734,12 @@ export class TestRoom extends Scene
                 this.player.body.setVelocityY(-250);
             }
         }
+        else if (action === 'enter' || action === 'leave')
+        {
+            // Calaqui / Quiza: there is nothing to go into or out of yet,
+            // so for now they always do the "that didn't work" wobble.
+            this.failAction();
+        }
         else if (action === 'fish')
         {
             if (this.fishing)
