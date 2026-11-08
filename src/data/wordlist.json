@@ -8,5 +8,6 @@
     { "word": "Namaca", "en": "Sell", "action": "sell" },
     { "word": "Calaqui", "en": "Enter", "action": "enter" },
     { "word": "Quiza", "en": "Leave", "action": "leave" },
-    { "word": "Maneloa", "en": "Swim", "action": "swim" }
+    { "word": "Maneloa", "en": "Swim", "action": "swim" },
+    { "word": "Neloa", "en": "Row", "action": "row" }
 ]
