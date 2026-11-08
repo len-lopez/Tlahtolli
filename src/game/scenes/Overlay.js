@@ -758,6 +758,12 @@ export class Overlay extends Scene
             : this.holdKeys[this.swimSlot].isDown;
     }
 
+    // Swimming is over: forget which slot started it.
+    releaseSwim ()
+    {
+        this.swimSlot = null;
+    }
+
     // Looks up the word's action in the word list and tells the room to do it.
     useSlot (letter)
     {
