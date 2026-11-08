@@ -334,6 +334,27 @@ const ROOM_ARRIVAL = [
     INSIDE_WIDTH / 2  // Inside: in front of the door (in the middle)
 ];
 
+// How far indoors each room is. Same order as ROOMS.
+// 0 = outdoors. 1 = inside a building. 2 = one more door further in (for example a basement).
+// Calaqui goes through a door to the side with the higher number,
+// Quiza to the side with the lower number.
+const ROOM_INDOORS = [
+    0, // Marketplace
+    0, // Home
+    0, // Lake of Colors
+    1  // Inside
+];
+
+// The ceiling of each room: the tile row of its top edge. Same order as ROOMS.
+// Nobody can go higher than that, not even by jumping (or, maybe one day, flying).
+// null = no ceiling of its own: the top of the screen is the limit, like outdoors.
+const ROOM_CEILING = [
+    null,          // Marketplace
+    null,          // Home
+    null,          // Lake of Colors
+    INSIDE_TOP_ROW // Inside
+];
+
 // The door: the same size in Home (on the house) and in Inside.
 const DOOR_WIDTH = 20;
 const DOOR_HEIGHT = 36;
@@ -352,6 +373,16 @@ const ROOF_HEIGHT = 2;       // in tiles
 const COLOR_WALL = 0xd9b38c;
 const COLOR_ROOF = 0xc9a227;
 const COLOR_DOOR = 0x4a2f1b;
+
+// --- Doors ---
+// Every door joins two rooms, so it has two sides: one door in each room.
+// For each side: the room (its number in ROOMS) and where the middle of the door is,
+// in tiles from that room's left edge. The doors stand on the ground there.
+// To add a door (for example to a basement), add one more line here.
+const DOORS = [
+    // The house door in Home <-> the door in Inside
+    [ { room: 1, col: HOUSE_COL + HOUSE_WIDTH / 2 }, { room: INSIDE_ROOM, col: INSIDE_WIDTH / 2 } ]
+];
 
 // Trees: the column of each trunk.
 const HOME_TREES = [ 2, 8, 23, 28 ];
@@ -552,8 +583,11 @@ export class TestRoom extends Scene
         // --- Marketplace: the leader's shelter, and the NPCs sitting on their mats ---
         this.decorateMarket();
 
-        // --- Inside: black around it, the back wall, and the door ---
+        // --- Inside: black around it and the back wall ---
         this.decorateInside();
+
+        // --- All doors (see DOORS) ---
+        this.makeDoors();
 
         // While the player's own speech animation runs (Ihtoa with nobody in front):
         // { bubble, timer }. null otherwise.
@@ -796,28 +830,12 @@ export class TestRoom extends Scene
                 this.player.body.setVelocityY(-250);
             }
         }
-        else if (action === 'enter')
+        else if (action === 'enter' || action === 'leave')
         {
-            // Calaqui: in front of the house door in Home, you go Inside.
-            // Anywhere else, the "that didn't work" wobble.
-            if (this.isAtDoor(this.homeDoor))
-            {
-                this.goThroughDoor(this.insideDoor);
-            }
-            else
-            {
-                this.failAction();
-            }
-        }
-        else if (action === 'leave')
-        {
-            // Quiza: in front of the door Inside, you come out in front of the house door in Home.
-            // Anywhere else, the "that didn't work" wobble.
-            if (this.isAtDoor(this.insideDoor))
-            {
-                this.goThroughDoor(this.homeDoor);
-            }
-            else
+            // Calaqui: through a door further indoors. Quiza: through a door further outdoors.
+            // If there's no such door in front of the player: the "that didn't work" wobble.
+            const deeper = action === 'enter';
+            if (!this.useDoor(deeper))
             {
                 this.failAction();
             }
@@ -856,8 +874,8 @@ export class TestRoom extends Scene
     }
 
     // Draws Inside: a black area the size of the screen (so everything around the room
-    // is black), the back wall of the room on top of it, and the door in the middle.
-    // All behind the player. The floor itself is made of tiles (see buildInsideGrid).
+    // is black), and the back wall of the room on top of it. Both behind the player.
+    // The floor itself is made of tiles (see buildInsideGrid); the door comes from DOORS.
     decorateInside ()
     {
         const left = roomLeft(INSIDE_ROOM);
@@ -873,30 +891,78 @@ export class TestRoom extends Scene
         const top = INSIDE_TOP_ROW * TILE;
         this.add.rectangle(left, top, width, ground - top, COLOR_INSIDE)
             .setOrigin(0, 0).setDepth(-1);
-
-        // Remembered, to know when the player stands in front of it (Quiza).
-        this.insideDoor = this.add.rectangle(middle - DOOR_WIDTH / 2, ground - DOOR_HEIGHT,
-            DOOR_WIDTH, DOOR_HEIGHT, COLOR_DOOR)
-            .setOrigin(0, 0).setDepth(-1);
     }
 
-    // Invisible walls the player can't walk through:
-    // one at the right end of the Lake (the last room you can walk to),
-    // and one on each side of every separate room (Inside).
+    // Draws every door from the DOORS list: a brown rectangle standing on the ground,
+    // behind the player. Each door is remembered in this.doors as
+    // [ side, side ], where a side is { room, rect } (rect = the door rectangle).
+    makeDoors ()
+    {
+        this.doors = DOORS.map((pair) => pair.map((side) => {
+            const x = roomLeft(side.room) + side.col * TILE; // middle of the door
+            const rect = this.add.rectangle(x - DOOR_WIDTH / 2, this.groundTopAt(x) - DOOR_HEIGHT,
+                DOOR_WIDTH, DOOR_HEIGHT, COLOR_DOOR)
+                .setOrigin(0, 0).setDepth(-1);
+            return { room: side.room, rect };
+        }));
+    }
+
+    // Calaqui (deeper = true) or Quiza (deeper = false).
+    // Looks for a door in front of the player whose other side is further indoors (Calaqui)
+    // or further outdoors (Quiza), and if there is one, takes the player through it.
+    // Returns true if the player went through a door, false if not.
+    useDoor (deeper)
+    {
+        for (const pair of this.doors)
+        {
+            for (let i = 0; i < 2; i++)
+            {
+                const here = pair[i];
+                const there = pair[1 - i];
+                const goesDeeper = ROOM_INDOORS[there.room] > ROOM_INDOORS[here.room];
+                const goesOut = ROOM_INDOORS[there.room] < ROOM_INDOORS[here.room];
+
+                if (this.isAtDoor(here.rect) && (deeper ? goesDeeper : goesOut))
+                {
+                    this.goThroughDoor(there.rect);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Invisible walls the player can't go through:
+    // - one at the right end of the Lake (the last room you can walk to),
+    // - one on each side of every separate room (Inside),
+    // - a ceiling over every room that has one (see ROOM_CEILING).
+    // The side walls are one tile thick and stand just outside the room.
+    // The ceilings fill everything from the top of the screen down to the room's top edge.
     makeRoomWalls ()
     {
-        const wallXs = [ roomLeft(FIRST_SEPARATE_ROOM - 1) + roomWidth(FIRST_SEPARATE_ROOM - 1) ];
-        for (let room = FIRST_SEPARATE_ROOM; room < ROOMS.length; room++)
-        {
-            wallXs.push(roomLeft(room), roomLeft(room) + roomWidth(room));
-        }
+        const height = ROOM_HEIGHT * TILE;
 
-        wallXs.forEach((x) => {
-            // A thin, tall rectangle exactly on the room's edge, half in, half out.
-            const height = ROOM_HEIGHT * TILE;
-            const wall = this.add.rectangle(x, height / 2, 2, height * 2).setVisible(false);
+        // Adds one invisible solid rectangle (left, top, width, height in pixels).
+        const addWall = (x, y, w, h) => {
+            const wall = this.add.rectangle(x, y, w, h).setOrigin(0, 0).setVisible(false);
             this.physics.add.existing(wall, true); // true = it never moves
             this.physics.add.collider(this.player, wall);
+        };
+
+        const lastWalkable = FIRST_SEPARATE_ROOM - 1;
+        addWall(roomLeft(lastWalkable) + roomWidth(lastWalkable), 0, TILE, height);
+
+        for (let room = FIRST_SEPARATE_ROOM; room < ROOMS.length; room++)
+        {
+            addWall(roomLeft(room) - TILE, 0, TILE, height);
+            addWall(roomLeft(room) + roomWidth(room), 0, TILE, height);
+        }
+
+        ROOM_CEILING.forEach((row, room) => {
+            if (row !== null)
+            {
+                addWall(roomLeft(room), 0, roomWidth(room), row * TILE);
+            }
         });
     }
 
@@ -924,7 +990,7 @@ export class TestRoom extends Scene
         const left = roomLeft(START_ROOM);
         const ground = (ROOM_HEIGHT - FLOOR_ROWS) * TILE; // top of the ground, in pixels
 
-        // House: walls, a roof that is a bit wider, and a door in the middle.
+        // House: walls and a roof that is a bit wider. (Its door comes from DOORS.)
         const houseLeft = left + HOUSE_COL * TILE;
         const houseWidth = HOUSE_WIDTH * TILE;
         const wallsTop = ground - HOUSE_HEIGHT * TILE;
@@ -936,10 +1002,7 @@ export class TestRoom extends Scene
             houseWidth + 2 * ROOF_OVERHANG * TILE, ROOF_HEIGHT * TILE, COLOR_ROOF)
             .setOrigin(0, 0).setDepth(-1);
 
-        // Remembered, to know when the player stands in front of it (Calaqui).
-        this.homeDoor = this.add.rectangle(houseLeft + (houseWidth - DOOR_WIDTH) / 2, ground - DOOR_HEIGHT,
-            DOOR_WIDTH, DOOR_HEIGHT, COLOR_DOOR)
-            .setOrigin(0, 0).setDepth(-1);
+        // (The door is drawn with all the other doors; see DOORS and makeDoors.)
 
         // Trees: a brown trunk with a green square on top.
         HOME_TREES.forEach((col) => {
