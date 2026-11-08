@@ -511,6 +511,8 @@ const SWIM_RISE_SPEED = 60;
 const SWIM_SINK = 6;
 // How long one swimming stroke takes (the arm going forward and back), in milliseconds.
 const SWIM_STROKE_TIME = 300;
+// Swimming on land or in the air: you move at this part of the normal speed (0.25 = a quarter).
+const SWIM_LAND_SPEED = 0.25;
 
 // A random whole number from min to max (both included).
 function randomBetween (min, max)
@@ -727,6 +729,9 @@ export class TestRoom extends Scene
 
         // While swimming (Maneloa held down): the swimming player and its arm. null otherwise.
         this.swimming = null;
+        // true while Maneloa is still held down but interrupted by the "that didn't work"
+        // wobble: you sink, and swimming goes on when the wobble is over.
+        this.swimPaused = false;
 
         // Remembered for fishing: the ground layer (to look up tiles) and where the ground starts.
         this.floor = floor;
@@ -743,6 +748,19 @@ export class TestRoom extends Scene
         // (The Lake of Colors has two.) Used for fishing in any water, and for knowing
         // where to come back after falling in.
         this.waters = findWaters(grid);
+
+        // The top of every water carries you while you swim (Maneloa), like a floor
+        // you can only stand on from above: coming up from under the water, you go through it.
+        // Without Maneloa it does nothing and you sink as usual. (Invisible.)
+        this.waters.forEach((water) => {
+            const top = this.add.rectangle(water.left, floorTop, water.right - water.left, 8)
+                .setOrigin(0, 0).setVisible(false);
+            this.physics.add.existing(top, true); // true = it never moves
+            top.body.checkCollision.down = false;
+            top.body.checkCollision.left = false;
+            top.body.checkCollision.right = false;
+            this.physics.add.collider(this.player, top, null, () => this.swimming !== null);
+        });
 
         // Where the player comes back after falling into a water: standing on the floor,
         // right next to that water's left edge (see fellIntoWater). This is the height.
@@ -907,7 +925,7 @@ export class TestRoom extends Scene
         else if (action === 'swim')
         {
             // Maneloa: swim for as long as the key is held down (see update).
-            if (!this.swimming)
+            if (!this.swimming && !this.swimPaused)
             {
                 this.startSwimming();
             }
@@ -927,6 +945,8 @@ export class TestRoom extends Scene
         else if (action === 'jump')
         {
             // Only jump when standing on the floor, not in mid-air.
+            // (While swimming with Maneloa, the top of the water counts as floor too,
+            // so you can jump out of the water there.)
             if (this.player.body.blocked.down)
             {
                 this.stopFishing();
@@ -2493,12 +2513,35 @@ export class TestRoom extends Scene
         {
             // Which water: the one under the player. (Just in case there's none, the first one.)
             const water = this.waterAt(this.player.x) ?? this.waters[0];
+            this.cancelEffects();
             this.player.body.reset(water.left - 8, this.respawnY);
             this.scene.get('Overlay').showLife(this.life);
         }
         else
         {
             this.blackOut();
+        }
+    }
+
+    // After falling into the water: what was going on stops.
+    // The fishing line is pulled in (and its minigame closed), swimming ends,
+    // and the "that didn't work" wobble stops.
+    cancelEffects ()
+    {
+        this.stopFishing();
+        const overlay = this.scene.get('Overlay');
+        if (overlay.mode === 'fishing' || overlay.mode === 'minigame')
+        {
+            overlay.endFishing();
+        }
+
+        this.stopSwimming();
+
+        if (this.failWobble)
+        {
+            this.failWobble.remove();
+            this.failWobble = null;
+            this.player.setAngle(0);
         }
     }
 
@@ -2619,7 +2662,7 @@ export class TestRoom extends Scene
     {
         const s = this.swimming;
         const body = this.player.body;
-        const sink = this.waterAt(this.player.x) ? SWIM_SINK : 0;
+        const sink = this.isInWater() ? SWIM_SINK : 0;
         const y = body.bottom - 6 + sink;
 
         s.body.setPosition(this.player.x, y);
@@ -2627,8 +2670,16 @@ export class TestRoom extends Scene
         s.arm.setPosition(this.player.x + s.stroke * 7, y - 6);
     }
 
-    // Maneloa is let go: the player stands up again (and sinks, if in the water).
+    // Maneloa is let go (or cancelled): the player stands up again (and sinks, if in the water).
     stopSwimming ()
+    {
+        this.swimPaused = false;
+        this.scene.get('Overlay').releaseSwim();
+        this.endSwimLook();
+    }
+
+    // Takes the swimming look away and lets the player fall normally again.
+    endSwimLook ()
     {
         if (!this.swimming)
         {
@@ -2646,36 +2697,61 @@ export class TestRoom extends Scene
         this.player.body.setAllowGravity(true);
     }
 
+    // Is the player in a water: over it, and at its top or below?
+    // (Jumping up out of the water doesn't count: that's in the air.)
+    isInWater ()
+    {
+        return this.waterAt(this.player.x) !== null && this.player.body.bottom >= this.floorTop - 1;
+    }
+
     // Called every frame while swimming.
-    // Over the water: below the surface, the player rises (SWIM_RISE_SPEED);
-    // at the surface, the player stays there and can swim left and right.
-    // Above the water (jumping or falling in) or over land: nothing special, normal falling.
+    // Under the water: the player rises (SWIM_RISE_SPEED), without falling.
+    // At the top: the top of the water carries the player (see the waters in create),
+    // so you can swim left and right, jump (Choloa) and swim out onto the land.
+    // Above the water or over land: nothing special, normal falling.
     updateSwimming ()
     {
         const body = this.player.body;
-        const surface = this.floorTop; // the top of the water
 
-        if (!this.waterAt(this.player.x) || body.bottom < surface - 1)
+        if (this.waterAt(this.player.x) && body.bottom > this.floorTop + 1)
         {
-            body.setAllowGravity(true);
-            return;
-        }
-
-        // Under the water (or just reaching the top): no falling while swimming.
-        body.setAllowGravity(false);
-
-        if (body.bottom > surface + 1)
-        {
-            // Under water: rise.
+            body.setAllowGravity(false);
             body.setVelocityY(-SWIM_RISE_SPEED);
         }
         else
         {
-            // At the top: stay exactly on the surface.
-            // (reset puts the player there and stops all movement; walking left/right
-            // is set again right after this, in update.)
-            body.reset(this.player.x, surface - body.height / 2);
+            body.setAllowGravity(true);
         }
+    }
+
+    // Maneloa, every frame while it's going on (or paused by the wobble).
+    // Let go: swimming ends. Wobbling: swimming is paused (you sink) and goes on afterwards.
+    handleSwimming ()
+    {
+        const overlay = this.scene.get('Overlay');
+
+        if (!overlay.isHoldingSwim())
+        {
+            this.stopSwimming();
+            return;
+        }
+
+        if (this.failWobble && this.failWobble.isPlaying())
+        {
+            if (this.swimming)
+            {
+                this.endSwimLook();
+                this.swimPaused = true;
+            }
+            return;
+        }
+
+        if (this.swimPaused)
+        {
+            this.swimPaused = false;
+            this.startSwimming();
+        }
+        this.updateSwimming();
     }
 
     // Placeholder "that didn't work" animation: the player wobbles a few times.
@@ -2868,22 +2944,21 @@ export class TestRoom extends Scene
 
     update (time, delta)
     {
-        const speed = 100; // pixels per second (was 80)
+        // Walking speed in pixels per second (was 80).
+        // Swimming on land or in the air (Maneloa): much slower (SWIM_LAND_SPEED).
+        let speed = 100;
+        if (this.swimming && !this.isInWater())
+        {
+            speed *= SWIM_LAND_SPEED;
+        }
 
         this.moveFishes(delta);
         this.updateFishing(delta);
 
         // Swimming (Maneloa) only lasts while its key or circle is held down.
-        if (this.swimming)
+        if (this.swimming || this.swimPaused)
         {
-            if (this.scene.get('Overlay').isHoldingSwim())
-            {
-                this.updateSwimming();
-            }
-            else
-            {
-                this.stopSwimming();
-            }
+            this.handleSwimming();
         }
 
         // Fell completely off the bottom of the screen (= into the water): lose life points.
