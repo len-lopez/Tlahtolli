@@ -1,7 +1,7 @@
 {
     "merchant": {
         "line": { "nah": "Nipochtecatl.", "en": "I am a merchant." },
-        "inspect": { "nah": "Ca pochtecatl.", "en": "It's a merchant." },
+        "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "pochtecatl.", "en": "merchant." } ] },
         "sells": [ "michin" ]
     },
     "beanCounter": {
@@ -25,8 +25,8 @@
         "sells": [ "michin" ]
     },
     "judge": {
-        "line": { "nah": "Tianquizpan nitlayacanqui.", "en": "I am the leader of the market." },
-        "inspect": { "nah": "Ca tianquizpan tlayacanqui.", "en": "It's the leader of the market." },
+        "line": { "nah": "Tianquizpan nitlayacanqui.", "en": "I am the marketplace judge." },
+        "inspect": { "words": [ { "nah": "Ca", "en": null }, { "nah": "tianquizpan tlayacanqui.", "en": "marketplace judge." } ] },
         "request": { "words": [
             { "nah": "Cuix", "en": null },
             { "nah": "nopampa", "en": "for me" },
