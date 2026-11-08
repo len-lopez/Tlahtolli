@@ -3,6 +3,7 @@ import npcText from '../../data/npcs.json';
 import menuText from '../../data/menu.json';
 import plantText from '../../data/plants.json';
 import homeText from '../../data/home.json';
+import doorText from '../../data/doors.json';
 import marketObjectText from '../../data/market-objects.json';
 import numberWords from '../../data/numbers.json';
 import { createProgress, recordAnswer } from '../progress.js';
@@ -938,13 +939,22 @@ export class TestRoom extends Scene
     // Draws every door from the DOORS list: a brown rectangle standing on the ground,
     // behind the player. Each door is remembered in this.doors as
     // [ side, side ], where a side is { room, rect } (rect = the door rectangle).
+    // Each door is also added to this.things for Itta: a door that leads further indoors
+    // is an entrance, one that leads further outdoors is an exit (src/data/doors.json).
     makeDoors ()
     {
-        this.doors = DOORS.map((pair) => pair.map((side) => {
+        this.doors = DOORS.map((pair) => pair.map((side, i) => {
             const x = roomLeft(side.room) + side.col * TILE; // middle of the door
-            const rect = this.add.rectangle(x - DOOR_WIDTH / 2, this.groundTopAt(x) - DOOR_HEIGHT,
+            const ground = this.groundTopAt(x);
+            const rect = this.add.rectangle(x - DOOR_WIDTH / 2, ground - DOOR_HEIGHT,
                 DOOR_WIDTH, DOOR_HEIGHT, COLOR_DOOR)
                 .setOrigin(0, 0).setDepth(-1);
+
+            const otherRoom = pair[1 - i].room;
+            const leadsIn = ROOM_INDOORS[otherRoom] > ROOM_INDOORS[side.room];
+            const text = leadsIn ? doorText.entrance.inspect : doorText.exit.inspect;
+            this.things.push({ x, width: DOOR_WIDTH, bottom: ground, text });
+
             return { room: side.room, rect };
         }));
     }
