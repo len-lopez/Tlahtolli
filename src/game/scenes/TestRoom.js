@@ -283,12 +283,46 @@ const SPEECH_WIDTH = 6;
 const SPEECH_HEIGHT = 4;
 const SPEECH_BLINK = 150; // milliseconds per blink (on or off)
 
-// All rooms, from left to right. The number in front is the room's place in this list.
+// --- Inside (placeholder name) ---
+// A small room behind the door of the house in Home: smaller than the screen.
+// 20 tiles wide (the screen is 32) and 12 tiles high (the screen is 18):
+// 10 tiles of room above 2 tiles of floor, in the middle of the screen from top to bottom.
+// Everything around this box is black.
+// Its ground is at the same height as in the other rooms (2 tiles of floor under it).
+const INSIDE_WIDTH = 20;
+const INSIDE_TOP_ROW = 3;      // the top edge of the box
+const INSIDE_FLOOR_ROWS = 2;   // ground thickness inside, in tiles
+const COLOR_INSIDE = 0x5a4632; // the back wall you see behind the player
+const COLOR_OUTSIDE = 0x000000; // around the box
+
+function buildInsideGrid ()
+{
+    const grid = [];
+    const groundTopRow = ROOM_HEIGHT - FLOOR_ROWS; // same ground height as the other rooms
+    for (let row = 0; row < ROOM_HEIGHT; row++)
+    {
+        const isFloor = row >= groundTopRow && row < groundTopRow + INSIDE_FLOOR_ROWS;
+        grid.push(new Array(INSIDE_WIDTH).fill(isFloor ? FLOOR : EMPTY));
+    }
+    return grid;
+}
+
+// All rooms. The number in front is the room's place in this list.
+// The first ones are side by side, from left to right: you walk from one into the next.
+// From FIRST_SEPARATE_ROOM on, each room stands alone, with an empty gap before it
+// and invisible walls on both sides: you can only get there through a door.
 const ROOMS = [
     buildMarketplaceGrid(), // 0 = Marketplace
     buildRoomGrid(),     // 1 = Home (where the game starts)
-    buildWaterRoomGrid() // 2 = Lake of Colors: right half is water
+    buildWaterRoomGrid(), // 2 = Lake of Colors: right half is water
+    buildInsideGrid()    // 3 = Inside (behind the door of the house in Home)
 ];
+const FIRST_SEPARATE_ROOM = 3;
+const INSIDE_ROOM = 3;
+
+// The empty gap before each separate room, in tiles: one screen wide,
+// so you never see a bit of the neighbouring room from inside it.
+const ROOM_GAP = ROOM_WIDTH;
 
 // Where the player appears when arriving in each room (start, save file, Map):
 // the tile column, counted from the room's left edge. Same order as ROOMS.
@@ -296,8 +330,13 @@ const ROOMS = [
 const ROOM_ARRIVAL = [
     MARKET_WIDTH - 4, // Marketplace: bottom right, 4 tiles from its right edge
     4,                // Home: 4 tiles from the left edge
-    4                 // Lake of Colors: 4 tiles from the left edge
+    4,                // Lake of Colors: 4 tiles from the left edge
+    INSIDE_WIDTH / 2  // Inside: in front of the door (in the middle)
 ];
+
+// The door: the same size in Home (on the house) and in Inside.
+const DOOR_WIDTH = 20;
+const DOOR_HEIGHT = 36;
 
 // The room where a new game starts, and where you wake up after blacking out:
 // Home.
@@ -406,13 +445,28 @@ function shuffle (list)
 // Rooms can have different widths now (the Marketplace is two screens wide).
 // These two helpers work out where each room is.
 
+// Is this room one of the separate ones (only reachable through a door)?
+function isSeparateRoom (room)
+{
+    return room >= FIRST_SEPARATE_ROOM;
+}
+
 // The left edge of a room, in pixels from the left edge of the whole map.
+// (Separate rooms have an empty gap in front of them; that's counted too.)
 function roomLeft (room)
 {
     let left = 0;
     for (let i = 0; i < room; i++)
     {
+        if (isSeparateRoom(i))
+        {
+            left += ROOM_GAP * TILE;
+        }
         left += ROOMS[i][0].length * TILE;
+    }
+    if (isSeparateRoom(room))
+    {
+        left += ROOM_GAP * TILE;
     }
     return left;
 }
@@ -438,13 +492,15 @@ function roomAt (x)
 
 // Puts the rooms side by side into one big grid,
 // so the player can walk from one room into the next.
+// Before each separate room comes an empty gap (see ROOM_GAP).
 function joinRoomsSideBySide (rooms)
 {
+    const gap = new Array(ROOM_GAP).fill(EMPTY);
     const grid = [];
     for (let row = 0; row < ROOM_HEIGHT; row++)
     {
         // Take this row from every room and glue them together.
-        grid.push(rooms.flatMap((room) => room[row]));
+        grid.push(rooms.flatMap((room, i) => isSeparateRoom(i) ? [ ...gap, ...room[row] ] : room[row]));
     }
     return grid;
 }
@@ -496,6 +552,9 @@ export class TestRoom extends Scene
         // --- Marketplace: the leader's shelter, and the NPCs sitting on their mats ---
         this.decorateMarket();
 
+        // --- Inside: black around it, the back wall, and the door ---
+        this.decorateInside();
+
         // While the player's own speech animation runs (Ihtoa with nobody in front):
         // { bubble, timer }. null otherwise.
         this.talking = null;
@@ -513,6 +572,9 @@ export class TestRoom extends Scene
 
         // ...and on the Marketplace slope.
         this.makeSlope(floorTop);
+
+        // ...and can't walk past the end of the Lake, or out of a separate room (Inside).
+        this.makeRoomWalls();
 
         // Which way the player is looking: 1 = right, -1 = left.
         // Changes whenever you walk left or right.
@@ -734,11 +796,31 @@ export class TestRoom extends Scene
                 this.player.body.setVelocityY(-250);
             }
         }
-        else if (action === 'enter' || action === 'leave')
+        else if (action === 'enter')
         {
-            // Calaqui / Quiza: there is nothing to go into or out of yet,
-            // so for now they always do the "that didn't work" wobble.
-            this.failAction();
+            // Calaqui: in front of the house door in Home, you go Inside.
+            // Anywhere else, the "that didn't work" wobble.
+            if (this.isAtDoor(this.homeDoor))
+            {
+                this.goThroughDoor(this.insideDoor);
+            }
+            else
+            {
+                this.failAction();
+            }
+        }
+        else if (action === 'leave')
+        {
+            // Quiza: in front of the door Inside, you come out in front of the house door in Home.
+            // Anywhere else, the "that didn't work" wobble.
+            if (this.isAtDoor(this.insideDoor))
+            {
+                this.goThroughDoor(this.homeDoor);
+            }
+            else
+            {
+                this.failAction();
+            }
         }
         else if (action === 'fish')
         {
@@ -773,6 +855,68 @@ export class TestRoom extends Scene
         this.player.body.reset(spot.x, spot.y);
     }
 
+    // Draws Inside: a black area the size of the screen (so everything around the room
+    // is black), the back wall of the room on top of it, and the door in the middle.
+    // All behind the player. The floor itself is made of tiles (see buildInsideGrid).
+    decorateInside ()
+    {
+        const left = roomLeft(INSIDE_ROOM);
+        const width = roomWidth(INSIDE_ROOM);
+        const middle = left + width / 2;
+        const ground = (ROOM_HEIGHT - FLOOR_ROWS) * TILE; // top of the ground, in pixels
+        const screenWidth = this.scale.width;
+        const screenHeight = this.scale.height;
+
+        this.add.rectangle(middle, screenHeight / 2, screenWidth, screenHeight, COLOR_OUTSIDE)
+            .setDepth(-2);
+
+        const top = INSIDE_TOP_ROW * TILE;
+        this.add.rectangle(left, top, width, ground - top, COLOR_INSIDE)
+            .setOrigin(0, 0).setDepth(-1);
+
+        // Remembered, to know when the player stands in front of it (Quiza).
+        this.insideDoor = this.add.rectangle(middle - DOOR_WIDTH / 2, ground - DOOR_HEIGHT,
+            DOOR_WIDTH, DOOR_HEIGHT, COLOR_DOOR)
+            .setOrigin(0, 0).setDepth(-1);
+    }
+
+    // Invisible walls the player can't walk through:
+    // one at the right end of the Lake (the last room you can walk to),
+    // and one on each side of every separate room (Inside).
+    makeRoomWalls ()
+    {
+        const wallXs = [ roomLeft(FIRST_SEPARATE_ROOM - 1) + roomWidth(FIRST_SEPARATE_ROOM - 1) ];
+        for (let room = FIRST_SEPARATE_ROOM; room < ROOMS.length; room++)
+        {
+            wallXs.push(roomLeft(room), roomLeft(room) + roomWidth(room));
+        }
+
+        wallXs.forEach((x) => {
+            // A thin, tall rectangle exactly on the room's edge, half in, half out.
+            const height = ROOM_HEIGHT * TILE;
+            const wall = this.add.rectangle(x, height / 2, 2, height * 2).setVisible(false);
+            this.physics.add.existing(wall, true); // true = it never moves
+            this.physics.add.collider(this.player, wall);
+        });
+    }
+
+    // Is the player standing in front of this door?
+    // Yes when the middle of the player is between the door's left and right edges,
+    // and the player isn't above the door (for example jumping high over it).
+    isAtDoor (door)
+    {
+        return this.player.x >= door.x && this.player.x <= door.x + door.width
+            && this.player.body.bottom > door.y;
+    }
+
+    // Puts the player in front of another door, standing on the ground.
+    // The camera follows by itself in the next frame (see update).
+    goThroughDoor (door)
+    {
+        const x = door.x + door.width / 2;
+        this.player.body.reset(x, this.groundTopAt(x) - 12); // 12 = half the player's height
+    }
+
     // Draws the placeholder house and trees in Home, all made of rectangles.
     // They are drawn behind everything else (depth -1), so the player walks in front of them.
     decorateHome ()
@@ -792,10 +936,9 @@ export class TestRoom extends Scene
             houseWidth + 2 * ROOF_OVERHANG * TILE, ROOF_HEIGHT * TILE, COLOR_ROOF)
             .setOrigin(0, 0).setDepth(-1);
 
-        const doorWidth = 20;
-        const doorHeight = 36;
-        this.add.rectangle(houseLeft + (houseWidth - doorWidth) / 2, ground - doorHeight,
-            doorWidth, doorHeight, COLOR_DOOR)
+        // Remembered, to know when the player stands in front of it (Calaqui).
+        this.homeDoor = this.add.rectangle(houseLeft + (houseWidth - DOOR_WIDTH) / 2, ground - DOOR_HEIGHT,
+            DOOR_WIDTH, DOOR_HEIGHT, COLOR_DOOR)
             .setOrigin(0, 0).setDepth(-1);
 
         // Trees: a brown trunk with a green square on top.
@@ -1120,9 +1263,20 @@ export class TestRoom extends Scene
     }
 
     // Keeps the camera inside one room: it may follow the player only up to that room's edges.
+    // A room narrower than the screen (Inside) is shown in the middle of the screen
+    // and the camera stands still; the black area around it fills the rest.
     keepCameraInRoom (room)
     {
-        this.cameras.main.setBounds(roomLeft(room), 0, roomWidth(room), this.mapHeight);
+        const screenWidth = this.cameras.main.width;
+        if (roomWidth(room) < screenWidth)
+        {
+            const middle = roomLeft(room) + roomWidth(room) / 2;
+            this.cameras.main.setBounds(middle - screenWidth / 2, 0, screenWidth, this.mapHeight);
+        }
+        else
+        {
+            this.cameras.main.setBounds(roomLeft(room), 0, roomWidth(room), this.mapHeight);
+        }
     }
 
     // Puts the eye on the front side of the player, near the top.
@@ -2361,7 +2515,7 @@ export class TestRoom extends Scene
             this.fishing.line.lineBetween(tip.x, tip.y, float.x, float.y);
         }
 
-        // Which room is the player in? (0 = Marketplace, 1 = Home, 2 = Lake of Colors)
+        // Which room is the player in? (0 = Marketplace, 1 = Home, 2 = Lake of Colors, 3 = Inside)
         const room = roomAt(this.player.x);
 
         // When the player walks into another room, the camera jumps there
